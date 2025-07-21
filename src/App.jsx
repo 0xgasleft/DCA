@@ -4,6 +4,8 @@ import { FaSpinner } from "react-icons/fa";
 import { useEffect } from "react";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { inject } from "@vercel/analytics";
+
 
 
 
@@ -120,6 +122,7 @@ const formatTimestamp = (unixTimestamp) => {
 }
 
 export default function App() {
+  inject();
   const [walletConnected, setWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState("");
   const [loading, setLoading] = useState(false);
@@ -250,7 +253,6 @@ export default function App() {
     }
     setFetchingPurchases(false);
   }
-
 
   const connectWallet = async () => {
     if (!window.ethereum) return toast.error("Please install MetaMask/Rabby");
