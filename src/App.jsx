@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { inject } from "@vercel/analytics";
-
+import { SpeedInsights } from "@vercel/speed-insights/react"
 
 
 
@@ -645,6 +645,7 @@ export default function App() {
         )}
       </div>
       <ToastContainer />
+      <SpeedInsights />
     </div>
   );
 
