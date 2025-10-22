@@ -1,57 +1,204 @@
 import { ethers } from "ethers";
-import { CONTRACT_ADDRESS, ROUTER_ADDRESS, ROUTER_ABI, RPC_URL } from "../lib/constants.js";
-import { signer } from "../lib/provider.js";
+import { CONTRACT_ADDRESS, RPC_URL } from "../lib/constants.js";
+import { executeDCA } from "../lib/routing.js";
+import { supabase } from "../lib/supabase.js";
+import { storeDCAAttempt } from "./store-dca-attempt.js";
 
-const BUY_PATH = [
-  "0x4200000000000000000000000000000000000006", // WETH
-  "0x0606FC632ee812bA970af72F8489baAa443C4B98"  // ANITA
-];
+async function doDCA(contract, session) {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`Processing session: ${session.address} -> ${session.destination_token}`);
 
-async function doDCA(contract, router, buyer) {
-  console.log(`Processing buyer: ${buyer}`);
-  const { amount_per_day } = await contract.dcaConfigs(buyer);
-  console.log(`Executing DCA for ${buyer} with amount_per_day: ${ethers.formatEther(amount_per_day)} ETH`);
-  const amounts = await router.getAmountsOut(amount_per_day, BUY_PATH);
-  let amountOutMin = amounts[amounts.length - 1];
-  amountOutMin = amountOutMin * 95n / 100n;
-  console.log(`Calculated amountOutMin with 5% slippage: ${ethers.formatEther(amountOutMin)} ANITA`);
-  const tx = await contract.runDCA(buyer, amountOutMin);
-  await tx.wait();
-  console.log(`✅ BUY executed for ${buyer} at ${tx.hash}`);
+  const config = await contract.getDCAConfig(session.address, session.destination_token);
+  const { sourceToken, destinationToken, amount_per_day, days_left, isNativeETH } = config;
+
+  console.log(`DCA Config:`);
+  console.log(`  Source Token: ${isNativeETH ? 'ETH (native)' : sourceToken}`);
+  console.log(`  Destination Token: ${destinationToken}`);
+  console.log(`  Amount per day: ${ethers.formatEther(amount_per_day)}`);
+  console.log(`  Days left: ${days_left.toString()}`);
+
+  const actualSourceToken = isNativeETH
+    ? "0x0000000000000000000000000000000000000000"
+    : sourceToken;
+
+  const result = await executeDCA(
+    contract,
+    session.address,
+    amount_per_day,
+    actualSourceToken,
+    destinationToken
+  );
+
+  await storeDCAAttempt({
+    buyerAddress: session.address,
+    sourceToken: actualSourceToken,
+    destinationToken: destinationToken,
+    amountPerDay: amount_per_day,
+    success: result.success,
+    errorMessage: result.success ? null : (result.error || 'Unknown error'),
+    retryCount: 0,
+    transactionHash: result.txHash || null,
+    priceImpact: result.priceImpact || null,
+    slippagePercent: result.slippagePercent || null,
+    routerUsed: result.router || null,
+    daysLeft: parseInt(days_left.toString())
+  });
+
+  try {
+    const { error: statsError } = await supabase.rpc('increment_execution_stats', {
+      p_source_token: actualSourceToken.toLowerCase(),
+      p_destination_token: destinationToken.toLowerCase(),
+      p_volume_executed: amount_per_day.toString()
+    });
+
+    if (statsError) {
+      console.error('Failed to update execution stats:', statsError.message);
+    } else {
+      console.log(`Stats updated: +${ethers.formatEther(amount_per_day)} executed, +1 purchase`);
+    }
+  } catch (statsErr) {
+    console.error('Stats tracking error:', statsErr.message);
+  }
+
+  if (result.success && result.priceImpact !== null && result.priceImpact !== undefined) {
+    try {
+      const { error: impactError } = await supabase
+        .from('price_impact_cache')
+        .upsert({
+          tx_hash: result.txHash.toLowerCase(),
+          buyer: session.address.toLowerCase(),
+          source_token: actualSourceToken.toLowerCase(),
+          destination_token: destinationToken.toLowerCase(),
+          price_impact: result.priceImpact,
+          slippage_percent: result.slippagePercent,
+          amount_in: amount_per_day.toString(),
+          amount_out: result.amountOut.toString(),
+          created_at: new Date().toISOString()
+        }, {
+          onConflict: 'tx_hash'
+        });
+
+      if (impactError) {
+        console.error('Failed to store price impact:', impactError.message);
+      } else {
+        console.log(`Price impact stored: ${result.priceImpact.toFixed(4)}%`);
+        if (result.slippagePercent !== null) {
+          console.log(`Slippage tolerance: ${result.slippagePercent}%`);
+        }
+      }
+    } catch (impactErr) {
+      console.error('Price impact storage error:', impactErr.message);
+    }
+  }
+
+  console.log(`${'='.repeat(60)}\n`);
+  return result;
 }
 
-export default async function launchDCA(contract, buyers) {
+export default async function launchDCA(contract, sessions) {
   try {
-
-    const router = new ethers.Contract(ROUTER_ADDRESS, ROUTER_ABI, signer);
-    console.log(`Using DCA contract: ${CONTRACT_ADDRESS}`);
-    console.log(`Using router: ${ROUTER_ADDRESS}`);
-    console.log(`Using RPC URL: ${RPC_URL}`);
+    console.log('\n' + '═'.repeat(60));
+    console.log('  DCA EXECUTION STARTED');
+    console.log('═'.repeat(60));
+    console.log(`Contract: ${CONTRACT_ADDRESS}`);
+    console.log(`RPC URL: ${RPC_URL}`);
+    console.log(`Total sessions: ${sessions.length}\n`);
 
     let successCount = 0;
-    for (const buyer of buyers) {
+    const results = [];
+
+    for (const session of sessions) {
       try {
-        await doDCA(contract, router, buyer);
+        const result = await doDCA(contract, session);
         successCount++;
+        results.push({ session: { address: session.address, destination_token: session.destination_token }, ...result });
 
       } catch (err) {
-        console.error(`❌ Error processing buyer ${buyer}:`, err.message);
-        console.log("Attempting a retry after 3 seconds...");
+        console.error(`Error processing session ${session.address} -> ${session.destination_token}:`, err.message);
+        console.log("Attempting retry after 3 seconds...");
+
         try {
           await new Promise(resolve => setTimeout(resolve, 3000));
-          await doDCA(contract, router, buyer);
+
+          // Get config for retry tracking
+          const config = await contract.getDCAConfig(session.address, session.destination_token);
+          const { sourceToken, destinationToken, amount_per_day, days_left, isNativeETH } = config;
+          const actualSourceToken = isNativeETH ? "0x0000000000000000000000000000000000000000" : sourceToken;
+
+          const result = await doDCA(contract, session);
+
+          // Track successful retry
+          await storeDCAAttempt({
+            buyerAddress: session.address,
+            sourceToken: actualSourceToken,
+            destinationToken: session.destination_token,
+            amountPerDay: amount_per_day,
+            success: true,
+            errorMessage: null,
+            retryCount: 1,
+            transactionHash: result.txHash || null,
+            priceImpact: result.priceImpact || null,
+            slippagePercent: result.slippagePercent || null,
+            routerUsed: result.router || null,
+            daysLeft: parseInt(days_left.toString())
+          });
+
           successCount++;
+          results.push({ session: { address: session.address, destination_token: session.destination_token }, ...result, retried: true });
+        } catch (retryErr) {
+          console.error(`Retry failed for session ${session.address} -> ${session.destination_token}:`, retryErr.message);
+
+          // Get config for failed retry tracking
+          try {
+            const config = await contract.getDCAConfig(session.address, session.destination_token);
+            const { sourceToken, destinationToken, amount_per_day, days_left, isNativeETH } = config;
+            const actualSourceToken = isNativeETH ? "0x0000000000000000000000000000000000000000" : sourceToken;
+
+            // Track failed retry
+            await storeDCAAttempt({
+              buyerAddress: session.address,
+              sourceToken: actualSourceToken,
+              destinationToken: session.destination_token,
+              amountPerDay: amount_per_day,
+              success: false,
+              errorMessage: retryErr.message,
+              retryCount: 1,
+              transactionHash: null,
+              priceImpact: null,
+              slippagePercent: null,
+              routerUsed: null,
+              daysLeft: parseInt(days_left.toString())
+            });
+          } catch (configErr) {
+            console.error('Failed to get config for retry tracking:', configErr.message);
+          }
+
+          results.push({ session: { address: session.address, destination_token: session.destination_token }, success: false, error: retryErr.message });
         }
-        catch (retryErr) {
-          console.error(`❌ Retry failed for buyer ${buyer}:`, retryErr.message);
-        }
-        console.warn(`⚠️ Skipped ${buyer}!`);
       }
     }
 
-    console.log(`DCA execution complete. Total successful: ${successCount}/${buyers.length}`);
+    console.log('\n' + '═'.repeat(60));
+    console.log('  DCA EXECUTION SUMMARY');
+    console.log('═'.repeat(60));
+    console.log(`Total successful: ${successCount}/${sessions.length}`);
+    console.log(`Failed: ${sessions.length - successCount}`);
+
+    const routerStats = {};
+    results.filter(r => r.success).forEach(r => {
+      routerStats[r.router] = (routerStats[r.router] || 0) + 1;
+    });
+
+    console.log('\nRouter Usage:');
+    Object.entries(routerStats).forEach(([router, count]) => {
+      console.log(`  ${router}: ${count} swap(s)`);
+    });
+    console.log('═'.repeat(60) + '\n');
+
+    return results;
 
   } catch (err) {
-    console.error("❌ Backend DCA error:", err);
+    console.error("Fatal DCA error:", err);
+    throw err;
   }
 }

@@ -1,2 +1,9 @@
 {
+  "devCommand": "vite --port $PORT",
+  "rewrites": [
+    {
+      "source": "/((?!api|@vite|@react-refresh|src|lib|node_modules|.*\\.).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
