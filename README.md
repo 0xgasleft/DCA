@@ -6,6 +6,9 @@
 
 **Trust minimized, Automated DCA Protocol on Ink Blockchain**
 
+[![Telegram](https://img.shields.io/badge/Telegram-Join%20Us-blue?logo=telegram&style=for-the-badge)](https://t.me/+qzZO0ePqZts3YmQ0)
+[![X (Twitter)](https://img.shields.io/badge/X-Follow%20Us-black?logo=x&style=for-the-badge)](https://x.com/ink_dca)
+
 </div>
 
 ---
