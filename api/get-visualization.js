@@ -10,12 +10,14 @@ const START_BLOCK = 28_000_000;
 
 const CONTRACT_ABI = [
   "function getRegisteredBuyers() view returns (address[] memory)",
-  "function getDCAConfig(address user, address destinationToken) view returns (address sourceToken, address destinationToken, uint256 amount_per_day, uint256 days_left, bool isNativeETH, uint256 buy_time)"
+  "function getDCAConfig(address user, address destinationToken) view returns (address sourceToken, address destinationToken, uint256 amount_per_day, uint256 days_left, bool isNativeETH, uint256 buy_time)",
+  "function owner() view returns (address)"
 ];
 
 const ERC20_ABI = [
   "function decimals() view returns (uint8)",
-  "function symbol() view returns (string)"
+  "function symbol() view returns (string)",
+  "function balanceOf(address account) view returns (uint256)"
 ];
 
 const tokenInfoCache = new Map();
@@ -266,13 +268,48 @@ export default async function handler(req, res) {
       dailyActivity.get(date).purchases += 1;
     }
 
-    const sourceTokenVolumes = Array.from(volumeBySourceToken.values()).map(data => ({
-      symbol: data.symbol,
-      address: data.address,
-      totalVolume: ethers.formatUnits(data.totalVolume, data.decimals),
-      registrationCount: data.registrationCount,
-      decimals: data.decimals
-    })).sort((a, b) => parseFloat(b.totalVolume) - parseFloat(a.totalVolume));
+    // Fetch contract balances for each source token
+    console.log("Fetching contract balances for source tokens...");
+    const contractBalances = new Map();
+
+    for (const [key, data] of volumeBySourceToken.entries()) {
+      try {
+        let balance;
+        if (data.address === '0x0000000000000000000000000000000000000000') {
+          // For native ETH, get the provider balance
+          balance = await provider.getBalance(CONTRACT_ADDRESS);
+        } else {
+          // For ERC20 tokens
+          const tokenContract = new ethers.Contract(data.address, ERC20_ABI, provider);
+          balance = await tokenContract.balanceOf(CONTRACT_ADDRESS);
+        }
+        contractBalances.set(key, {
+          raw: balance.toString(),
+          formatted: ethers.formatUnits(balance, data.decimals)
+        });
+        console.log(`  ${data.symbol}: ${ethers.formatUnits(balance, data.decimals)}`);
+      } catch (error) {
+        console.error(`Failed to get balance for ${data.symbol}:`, error);
+        contractBalances.set(key, {
+          raw: '0',
+          formatted: '0'
+        });
+      }
+    }
+
+    const sourceTokenVolumes = Array.from(volumeBySourceToken.values()).map(data => {
+      const key = `${data.symbol}|${data.address}`;
+      const balance = contractBalances.get(key) || { formatted: '0', raw: '0' };
+      return {
+        symbol: data.symbol,
+        address: data.address,
+        totalVolume: ethers.formatUnits(data.totalVolume, data.decimals),
+        registrationCount: data.registrationCount,
+        decimals: data.decimals,
+        contractBalance: balance.formatted,
+        contractBalanceRaw: balance.raw
+      };
+    }).sort((a, b) => parseFloat(b.totalVolume) - parseFloat(a.totalVolume));
 
     const destinationTokenVolumes = Array.from(volumeByDestinationToken.values()).map(data => ({
       symbol: data.symbol,
@@ -291,6 +328,21 @@ export default async function handler(req, res) {
       .sort((a, b) => b.count - a.count);
 
     console.log(`Lifetime unique wallets: ${uniqueLifetimeWallets.size}`);
+
+    // Fetch owner address and ETH balance
+    console.log("Fetching contract owner and balance...");
+    let ownerAddress;
+    let ownerBalance = '0';
+    try {
+      ownerAddress = await contract.owner();
+      const balance = await provider.getBalance(ownerAddress);
+      ownerBalance = ethers.formatEther(balance);
+      console.log(`  Owner: ${ownerAddress}`);
+      console.log(`  Owner balance: ${ownerBalance} ETH`);
+    } catch (error) {
+      console.error("Failed to fetch owner info:", error);
+      ownerAddress = "Unknown";
+    }
 
     const visualizationData = {
       overview: {
@@ -317,6 +369,8 @@ export default async function handler(req, res) {
         lastSyncedBlock,
         dataFetchedAt: new Date().toISOString(),
         contractAddress: CONTRACT_ADDRESS,
+        ownerAddress,
+        ownerBalance,
         needsSync: lastSyncedBlock < currentBlock,
         blocksBehind: Math.max(0, currentBlock - lastSyncedBlock)
       }
