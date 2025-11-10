@@ -293,6 +293,66 @@ export default function VisualizerPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Owner Balance Alert */}
+        {metadata?.ownerBalance && (() => {
+          const balance = parseFloat(metadata.ownerBalance);
+          let bgColor, borderColor, textColor, icon, message;
+
+          if (balance < 0.00001) {
+            bgColor = "bg-red-50";
+            borderColor = "border-red-500";
+            textColor = "text-red-900";
+            icon = (
+              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            );
+            message = "CRITICAL: Owner balance is critically low! Gas fees may fail.";
+          } else if (balance < 0.0001) {
+            bgColor = "bg-orange-50";
+            borderColor = "border-orange-500";
+            textColor = "text-orange-900";
+            icon = (
+              <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            );
+            message = "WARNING: Owner balance is low. Consider topping up soon.";
+          } else {
+            bgColor = "bg-green-50";
+            borderColor = "border-green-500";
+            textColor = "text-green-900";
+            icon = (
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            );
+            message = "Owner balance is healthy.";
+          }
+
+          return (
+            <div className={`${bgColor} border-l-4 ${borderColor} rounded-lg p-4 mb-6 shadow-md`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {icon}
+                  <div>
+                    <p className={`font-semibold ${textColor}`}>{message}</p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Owner: <span className="font-mono text-xs">{metadata.ownerAddress?.slice(0, 10)}...{metadata.ownerAddress?.slice(-8)}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-2xl font-bold ${textColor}`}>
+                    {balance.toFixed(6)} ETH
+                  </p>
+                  <p className="text-xs text-gray-500">Contract Owner Balance</p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-purple-500 hover:shadow-xl transition-shadow">

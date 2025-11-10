@@ -10,7 +10,8 @@ const START_BLOCK = 28_000_000;
 
 const CONTRACT_ABI = [
   "function getRegisteredBuyers() view returns (address[] memory)",
-  "function getDCAConfig(address user, address destinationToken) view returns (address sourceToken, address destinationToken, uint256 amount_per_day, uint256 days_left, bool isNativeETH, uint256 buy_time)"
+  "function getDCAConfig(address user, address destinationToken) view returns (address sourceToken, address destinationToken, uint256 amount_per_day, uint256 days_left, bool isNativeETH, uint256 buy_time)",
+  "function owner() view returns (address)"
 ];
 
 const ERC20_ABI = [
@@ -328,6 +329,21 @@ export default async function handler(req, res) {
 
     console.log(`Lifetime unique wallets: ${uniqueLifetimeWallets.size}`);
 
+    // Fetch owner address and ETH balance
+    console.log("Fetching contract owner and balance...");
+    let ownerAddress;
+    let ownerBalance = '0';
+    try {
+      ownerAddress = await contract.owner();
+      const balance = await provider.getBalance(ownerAddress);
+      ownerBalance = ethers.formatEther(balance);
+      console.log(`  Owner: ${ownerAddress}`);
+      console.log(`  Owner balance: ${ownerBalance} ETH`);
+    } catch (error) {
+      console.error("Failed to fetch owner info:", error);
+      ownerAddress = "Unknown";
+    }
+
     const visualizationData = {
       overview: {
         uniqueWallets: uniqueLifetimeWallets.size, // Total unique wallets who have ever used the platform
@@ -353,6 +369,8 @@ export default async function handler(req, res) {
         lastSyncedBlock,
         dataFetchedAt: new Date().toISOString(),
         contractAddress: CONTRACT_ADDRESS,
+        ownerAddress,
+        ownerBalance,
         needsSync: lastSyncedBlock < currentBlock,
         blocksBehind: Math.max(0, currentBlock - lastSyncedBlock)
       }
