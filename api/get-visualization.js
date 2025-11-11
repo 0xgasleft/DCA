@@ -353,9 +353,6 @@ export default async function handler(req, res) {
         totalActiveSessions, // Already calculated from live contract state
         totalCancelledSessions: destroyEvents.length,
         totalTokenPairs: tokenPairsArray.length,
-        averagePurchasesPerSession: totalActiveSessions > 0
-          ? (totalPurchasesExecuted / totalActiveSessions).toFixed(2)
-          : 0,
         completionRate: totalRegistrations > 0
           ? (((totalRegistrations - destroyEvents.length) / totalRegistrations) * 100).toFixed(1)
           : 0

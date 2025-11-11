@@ -437,9 +437,48 @@ export default function VisualizerPage() {
           </div>
 
           <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
-            <p className="text-sm opacity-90 mb-2">Avg Purchases/Session</p>
-            <p className="text-3xl font-bold">{overview.averagePurchasesPerSession}</p>
-            <p className="text-xs opacity-75 mt-1">Execution efficiency</p>
+            <p className="text-sm opacity-90 mb-2">Cancelled Sessions</p>
+            <p className="text-3xl font-bold">{overview.totalCancelledSessions.toLocaleString()}</p>
+            <p className="text-xs opacity-75 mt-1">Destroyed DCA strategies</p>
+          </div>
+        </div>
+
+        {/* Contract Balances Section */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="bg-gradient-to-br from-green-500 to-green-600 p-2 rounded-lg">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">DCA Contract Token Balances</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {sourceTokenVolumes.map((token, index) => (
+              <div key={index} className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">{token.symbol.charAt(0)}</span>
+                    </div>
+                    <span className="font-bold text-gray-900">{token.symbol}</span>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <p className="text-2xl font-bold text-green-700">
+                    {formatTokenAmount(token.contractBalance || '0', token.decimals)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1 font-mono">
+                    {token.address.slice(0, 6)}...{token.address.slice(-4)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-800">
+              <span className="font-semibold">Note:</span> These balances represent tokens currently held in the DCA contract for upcoming purchases.
+            </p>
           </div>
         </div>
 
