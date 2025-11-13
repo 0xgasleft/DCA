@@ -11,6 +11,7 @@ import ConnectWalletPage from "./pages/ConnectWalletPage.jsx";
 import TokenSelectionPage from "./pages/TokenSelectionPage.jsx";
 import DCAConfigPage from "./pages/DCAConfigPage.jsx";
 import VisualizerPage from "./pages/VisualizerPage.jsx";
+import HallOfFamePage from "./pages/HallOfFamePage.jsx";
 import ThemeToggle from "./components/ThemeToggle.jsx";
 
 
@@ -1051,6 +1052,27 @@ export default function App() {
       <div className="max-w-6xl mx-auto mb-6">
         <div className="flex flex-col sm:flex-row gap-4 justify-center bg-gradient-to-r from-purple-50 to-pink-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl p-4 shadow-lg border border-purple-100 dark:border-gray-600">
           <button
+            onClick={() => setActiveTab("hallOfFame")}
+            className={`group relative px-6 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
+              activeTab === "hallOfFame"
+                ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-xl shadow-yellow-300 dark:shadow-yellow-900/50"
+                : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-yellow-50 dark:hover:bg-gray-600 hover:border-yellow-300 dark:hover:border-yellow-500 shadow-md hover:shadow-xl border border-yellow-200 dark:border-gray-600"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0">
+                <svg className={`w-6 h-6 transition-colors ${activeTab === "hallOfFame" ? "text-white" : "text-yellow-600 group-hover:text-yellow-700"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <div className="text-base font-bold leading-tight">Hall of Fame</div>
+                <div className={`text-xs leading-tight mt-0.5 ${activeTab === "hallOfFame" ? "text-yellow-100" : "text-gray-500 group-hover:text-yellow-600"}`}>Top DCA Strategists</div>
+              </div>
+            </div>
+          </button>
+
+          <button
             onClick={() => setActiveTab("register")}
             className={`group relative px-6 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
               activeTab === "register"
@@ -1137,6 +1159,9 @@ export default function App() {
 
       {/* Main Content */}
       <div className="max-w-6xl mx-auto">
+        {/* HALL OF FAME TAB */}
+        {activeTab === "hallOfFame" && <HallOfFamePage />}
+
         {/* REGISTER TAB */}
         {activeTab === "register" && (
           <>
