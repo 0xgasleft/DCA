@@ -702,6 +702,11 @@ export default function VisualizerPage() {
                       <div className="text-right">
                         <p className="text-lg font-bold text-gray-900">{formatTokenAmount(token.totalVolume, token.decimals)}</p>
                         <p className="text-xs text-gray-500">{token.registrationCount} DCAs</p>
+                        {token.contractBalance && (
+                          <p className="text-xs text-green-600 font-semibold mt-1">
+                            Balance: {formatTokenAmount(token.contractBalance, token.decimals)}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">

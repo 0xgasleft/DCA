@@ -19,9 +19,9 @@
 
 ### Key Features
 
-- ✅ **Trust minimized*** - Your funds never leave your control; all operations are executed on-chain via smart contracts
+- ✅ **Trust minimized** - Your funds never leave your control; all operations are executed on-chain via smart contracts
 - ⏰ **Scheduled Execution** - Set your preferred time and frequency; purchases execute automatically at the exact time you choose
-- 💰 **Multiple Token Pairs** - Support for various DCA strategies (ETH → kBTC, USDC → ETH, etc.)
+- 💰 **Multiple Token Pairs** - Support for various DCA strategies (ETH → kBTC, USDT0 → ETH, etc.)
 - 📊 **Real-time Statistics** - Track your DCA performance with volume metrics and purchase history
 - 🔒 **Optimal Pricing** - Automatic routing through Relay Reservoir for best available prices
 - 🌓 **Dark Mode** - Beautiful UI with automatic theme detection based on system preferences
