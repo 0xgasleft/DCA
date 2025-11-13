@@ -19,15 +19,15 @@
 
 ### Key Features
 
-- ✅ **Trust minimized** - Your funds never leave your control; all operations are executed on-chain via smart contracts
-- ⏰ **Scheduled Execution** - Set your preferred time and frequency; purchases execute automatically at the exact time you choose
-- 💰 **Multiple Token Pairs** - Support for various DCA strategies (ETH → kBTC, USDT0 → ETH, etc.)
-- 📊 **Real-time Statistics** - Track your DCA performance with volume metrics and purchase history
-- 🔒 **Optimal Pricing** - Automatic routing through Relay Reservoir for best available prices
-- 🌓 **Dark Mode** - Beautiful UI with automatic theme detection based on system preferences
-- 📈 **Price Impact Tracking** - View actual execution metrics including price impact and slippage
-- ⚡ **Powered by Relay** - Automated execution infrastructure ensuring guaranteed daily purchases
-- 🎨 **Modern UI/UX** - Clean, responsive design built with React and Tailwind CSS
+- **Trust minimized** - Your funds never leave your control; all operations are executed on-chain via smart contracts
+- **Scheduled Execution** - Set your preferred time and frequency; purchases execute automatically at the exact time you choose
+- **Multiple Token Pairs** - Support for various DCA strategies (ETH → kBTC, USDT0 → ETH, etc.)
+- **Real-time Statistics** - Track your DCA performance with volume metrics and purchase history
+- **Optimal Pricing** - Automatic routing through Relay Reservoir for best available prices
+- **Dark Mode** - Beautiful UI with automatic theme detection based on system preferences
+- **Price Impact Tracking** - View actual execution metrics including price impact and slippage
+- **Powered by Relay** - Automated execution infrastructure ensuring guaranteed daily purchases
+- **Modern UI/UX** - Clean, responsive design built with React and Tailwind CSS
 
 ---
 
