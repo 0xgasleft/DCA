@@ -120,14 +120,14 @@ export default async function launchDCA(contract, sessions) {
         try {
           await new Promise(resolve => setTimeout(resolve, 3000));
 
-          // Get config for retry tracking
+          
           const config = await contract.getDCAConfig(session.address, session.destination_token);
           const { sourceToken, destinationToken, amount_per_day, days_left, isNativeETH } = config;
           const actualSourceToken = isNativeETH ? "0x0000000000000000000000000000000000000000" : sourceToken;
 
           const result = await doDCA(contract, session);
 
-          // Track successful retry
+          
           await storeDCAAttempt({
             buyerAddress: session.address,
             sourceToken: actualSourceToken,
@@ -148,13 +148,13 @@ export default async function launchDCA(contract, sessions) {
         } catch (retryErr) {
           console.error(`Retry failed for session ${session.address} -> ${session.destination_token}:`, retryErr.message);
 
-          // Get config for failed retry tracking
+          
           try {
             const config = await contract.getDCAConfig(session.address, session.destination_token);
             const { sourceToken, destinationToken, amount_per_day, days_left, isNativeETH } = config;
             const actualSourceToken = isNativeETH ? "0x0000000000000000000000000000000000000000" : sourceToken;
 
-            // Track failed retry
+            
             await storeDCAAttempt({
               buyerAddress: session.address,
               sourceToken: actualSourceToken,

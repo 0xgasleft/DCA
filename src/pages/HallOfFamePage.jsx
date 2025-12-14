@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-// Smart number formatter
+
 function formatTokenAmount(value, decimals = 18) {
   const num = parseFloat(value);
   if (num === 0) return "0";
@@ -13,7 +13,7 @@ function formatTokenAmount(value, decimals = 18) {
 }
 
 export default function HallOfFamePage() {
-  // Add global font styling
+  
   useEffect(() => {
     document.body.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
   }, []);
@@ -99,37 +99,37 @@ export default function HallOfFamePage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
-      {/* Hall of Fame Header - Premium Design */}
+      {}
       <div className="relative overflow-hidden rounded-3xl mb-12">
-        {/* Animated Background */}
+        {}
         <div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-pink-500 to-orange-500"></div>
         <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/30 via-purple-600/30 to-pink-600/30 animate-pulse-slow"></div>
 
-        {/* Decorative Elements */}
+        {}
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-yellow-400/20 to-transparent rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-pink-400/20 to-transparent rounded-full blur-3xl"></div>
 
-        {/* Content */}
+        {}
         <div className="relative z-10 px-8 py-12 md:py-16">
           <div className="text-center">
-            {/* Trophy Icon */}
+            {}
             <div className="inline-flex items-center justify-center w-20 h-20 mb-6 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl">
               <svg className="w-12 h-12 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
               </svg>
             </div>
 
-            {/* Title */}
+            {}
             <h1 className="text-5xl md:text-6xl font-black text-white mb-4 tracking-tight" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif', letterSpacing: '-0.02em' }}>
               HALL OF FAME
             </h1>
 
-            {/* Subtitle */}
+            {}
             <p className="text-xl md:text-2xl text-white/90 mb-6 font-medium" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
               Honoring the Keepers of the DCA Flame
             </p>
 
-            {/* Stats Bar */}
+            {}
             <div className="inline-flex items-center gap-8 bg-white/10 backdrop-blur-xl rounded-2xl px-8 py-4 border border-white/20 shadow-xl">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
@@ -149,23 +149,23 @@ export default function HallOfFamePage() {
           </div>
         </div>
 
-        {/* Bottom Glow */}
+        {}
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent"></div>
       </div>
 
-      {/* Top 3 Podium - Modern Floating Cards Design */}
+      {}
       {hallOfFame.rankings.length >= 3 && (
         <div className="mb-12 max-w-6xl mx-auto px-4">
           <div className="grid grid-cols-3 gap-6 items-end">
-            {/* 2nd Place */}
+            {}
             <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
               <div className="relative group">
-                {/* Glow effect */}
+                {}
                 <div className="absolute -inset-0.5 bg-gradient-to-br from-slate-400 via-slate-300 to-slate-500 rounded-2xl blur-xl opacity-50 group-hover:opacity-75 transition duration-500"></div>
 
-                {/* Card */}
+                {}
                 <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-2xl transform group-hover:-translate-y-2 transition-all duration-500">
-                  {/* Rank Badge */}
+                  {}
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                     <div className="relative">
                       <div className="w-16 h-16 bg-gradient-to-br from-slate-300 via-slate-400 to-slate-500 rounded-2xl rotate-45 shadow-lg"></div>
@@ -175,7 +175,7 @@ export default function HallOfFamePage() {
                     </div>
                   </div>
 
-                  {/* Content */}
+                  {}
                   <div className="mt-8 text-center space-y-3">
                     <div className="text-xs font-mono text-slate-600 dark:text-slate-400 tracking-wider truncate px-2" style={{ fontFamily: 'SF Mono, Monaco, monospace' }}>
                       {hallOfFame.rankings[1].address.slice(0, 8)}...{hallOfFame.rankings[1].address.slice(-6)}
@@ -207,21 +207,21 @@ export default function HallOfFamePage() {
                     </div>
                   </div>
 
-                  {/* Silver medal decoration */}
+                  {}
                   <div className="absolute top-4 right-4 w-8 h-8 bg-gradient-to-br from-slate-300 to-slate-400 rounded-full opacity-20"></div>
                 </div>
               </div>
             </div>
 
-            {/* 1st Place */}
+            {}
             <div className="animate-slide-up -mt-8" style={{ animationDelay: '0s' }}>
               <div className="relative group">
-                {/* Enhanced glow effect */}
+                {}
                 <div className="absolute -inset-1 bg-gradient-to-br from-yellow-400 via-amber-400 to-orange-400 rounded-3xl blur-2xl opacity-75 group-hover:opacity-100 transition duration-500 animate-pulse-slow"></div>
 
-                {/* Card */}
+                {}
                 <div className="relative bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/50 dark:to-amber-900/50 backdrop-blur-xl rounded-3xl p-8 border-2 border-yellow-300 dark:border-yellow-600 shadow-2xl transform group-hover:-translate-y-3 transition-all duration-500">
-                  {/* Rank Badge */}
+                  {}
                   <div className="absolute -top-6 left-1/2 transform -translate-x-1/2">
                     <div className="relative">
                       <div className="w-20 h-20 bg-gradient-to-br from-yellow-300 via-yellow-400 to-amber-500 rounded-3xl rotate-45 shadow-2xl"></div>
@@ -233,7 +233,7 @@ export default function HallOfFamePage() {
                     </div>
                   </div>
 
-                  {/* Content */}
+                  {}
                   <div className="mt-10 text-center space-y-4">
                     <div className="text-sm font-mono font-bold text-yellow-800 dark:text-yellow-300 tracking-wider truncate px-2" style={{ fontFamily: 'SF Mono, Monaco, monospace' }}>
                       {hallOfFame.rankings[0].address.slice(0, 8)}...{hallOfFame.rankings[0].address.slice(-6)}
@@ -265,22 +265,22 @@ export default function HallOfFamePage() {
                     </div>
                   </div>
 
-                  {/* Gold sparkle decorations */}
+                  {}
                   <div className="absolute top-6 right-6 w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
                   <div className="absolute bottom-6 left-6 w-2 h-2 bg-amber-400 rounded-full animate-ping" style={{ animationDelay: '0.3s' }}></div>
                 </div>
               </div>
             </div>
 
-            {/* 3rd Place */}
+            {}
             <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
               <div className="relative group">
-                {/* Glow effect */}
+                {}
                 <div className="absolute -inset-0.5 bg-gradient-to-br from-orange-400 via-orange-300 to-amber-500 rounded-2xl blur-xl opacity-50 group-hover:opacity-75 transition duration-500"></div>
 
-                {/* Card */}
+                {}
                 <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl p-6 border border-orange-200 dark:border-orange-700 shadow-2xl transform group-hover:-translate-y-2 transition-all duration-500">
-                  {/* Rank Badge */}
+                  {}
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                     <div className="relative">
                       <div className="w-16 h-16 bg-gradient-to-br from-orange-300 via-orange-400 to-amber-500 rounded-2xl rotate-45 shadow-lg"></div>
@@ -290,7 +290,7 @@ export default function HallOfFamePage() {
                     </div>
                   </div>
 
-                  {/* Content */}
+                  {}
                   <div className="mt-8 text-center space-y-3">
                     <div className="text-xs font-mono text-orange-600 dark:text-orange-400 tracking-wider truncate px-2" style={{ fontFamily: 'SF Mono, Monaco, monospace' }}>
                       {hallOfFame.rankings[2].address.slice(0, 8)}...{hallOfFame.rankings[2].address.slice(-6)}
@@ -322,7 +322,7 @@ export default function HallOfFamePage() {
                     </div>
                   </div>
 
-                  {/* Bronze medal decoration */}
+                  {}
                   <div className="absolute top-4 right-4 w-8 h-8 bg-gradient-to-br from-orange-300 to-amber-400 rounded-full opacity-20"></div>
                 </div>
               </div>
@@ -373,7 +373,7 @@ export default function HallOfFamePage() {
         }
       `}</style>
 
-      {/* Full Rankings Table */}
+      {}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden mb-8">
         <div className="overflow-x-auto">
           <table className="w-full min-w-max" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
@@ -461,7 +461,7 @@ export default function HallOfFamePage() {
         </div>
       </div>
 
-      {/* Score Breakdown Legend */}
+      {}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif', fontWeight: '800' }}>SCORING FORMULA</h3>
         <div className="mb-4 p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl border-2 border-purple-200 dark:border-purple-700">

@@ -12,7 +12,7 @@ export default function TokenCard({ token, tokenKey, onSelectDCA }) {
 
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:border-purple-300 dark:hover:border-purple-600 bg-white dark:bg-gray-800">
-      {/* Token Header */}
+      {}
       <div
         className="bg-gradient-to-r from-purple-600 via-purple-700 to-purple-800 dark:from-purple-700 dark:via-purple-800 dark:to-purple-900 p-6 cursor-pointer hover:from-purple-700 hover:via-purple-800 hover:to-purple-900 dark:hover:from-purple-600 dark:hover:via-purple-700 dark:hover:to-purple-800 transition-all duration-300"
         onClick={() => setExpanded(!expanded)}
@@ -55,7 +55,7 @@ export default function TokenCard({ token, tokenKey, onSelectDCA }) {
         </div>
       </div>
 
-      {/* DCA Options (when expanded) */}
+      {}
       {expanded && (
         <div className="bg-gradient-to-b from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 p-6 space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
@@ -84,7 +84,7 @@ function DCAOptionCard({ tokenKey, token, dcaConfig, onSelect }) {
 
   return (
     <div className="bg-white dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl p-5 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-md transition-all duration-200">
-      {/* DCA Pair Header */}
+      {}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -108,7 +108,7 @@ function DCAOptionCard({ tokenKey, token, dcaConfig, onSelect }) {
         </button>
       </div>
 
-      {/* Stats */}
+      {}
       <TokenStatsCard
         tokenSymbol={tokenKey}
         sourceSymbol={dcaConfig.source}

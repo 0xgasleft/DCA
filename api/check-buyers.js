@@ -7,7 +7,7 @@ const EXPECTED_SCHEDULE_ID = process.env.UPSTASH_CHECK_BUYERS_ID;
 
 function getCurrentTimeSlot() {
   const now = new Date();
-  // Always use UTC time since buy_time is stored in UTC in the contract
+  
   const hh = String(now.getUTCHours()).padStart(2, "0");
   const mm = String(Math.floor(now.getUTCMinutes() / 15) * 15).padStart(2, "0");
   return `${hh}:${mm}`;

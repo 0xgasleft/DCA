@@ -1,17 +1,8 @@
 import { supabase } from "../lib/supabase.js";
 
-/**
- * GET /api/get-dca-attempt-stats
- * Fetches DCA attempt statistics for the visualizer dashboard
- *
- * Query parameters:
- * - password: Visualizer password for authentication
- * - buyer: Optional filter by buyer address
- * - token: Optional filter by destination token
- * - days: Number of days to look back (default: 30)
- */
+
 export default async function handler(req, res) {
-  // CORS headers
+  
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -25,11 +16,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get parameters from query or body
+    
     const params = req.method === 'GET' ? req.query : req.body;
     const { password, buyer, token, days = 30 } = params;
 
-    // Validate password
+    
     const VISUALIZER_PASSWORD = process.env.VISUALIZER_PASSWORD || 'your-secure-password';
     if (password !== VISUALIZER_PASSWORD) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -39,14 +30,14 @@ export default async function handler(req, res) {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 
-    // Build base query
+    
     let query = supabase
       .from('dca_attempt_tracking')
       .select('*')
       .gte('attempt_timestamp', cutoffDate.toISOString())
       .order('attempt_timestamp', { ascending: false });
 
-    // Apply filters
+    
     if (buyer) {
       query = query.eq('buyer_address', buyer.toLowerCase());
     }
@@ -61,18 +52,18 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: error.message });
     }
 
-    // Calculate overall statistics
+    
     const totalAttempts = attempts.length;
     const successfulAttempts = attempts.filter(a => a.success).length;
     const failedAttempts = attempts.filter(a => !a.success).length;
     const successRate = totalAttempts > 0 ? ((successfulAttempts / totalAttempts) * 100).toFixed(2) : 0;
 
-    // Calculate retry statistics
+    
     const retriedAttempts = attempts.filter(a => a.retry_count > 0);
     const retriedSuccess = retriedAttempts.filter(a => a.success).length;
     const retriedFailed = retriedAttempts.filter(a => !a.success).length;
 
-    // Group by buyer and token pair
+    
     const byBuyerToken = {};
     attempts.forEach(attempt => {
       const key = `${attempt.buyer_address}:${attempt.destination_token}`;
@@ -97,13 +88,13 @@ export default async function handler(req, res) {
       }
     });
 
-    // Calculate success rates and average price impact
+    
     const buyerTokenStats = Object.values(byBuyerToken).map(stat => {
       stat.successRate = stat.totalAttempts > 0
         ? ((stat.successful / stat.totalAttempts) * 100).toFixed(2)
         : 0;
 
-      // Calculate average price impact for successful attempts
+      
       const successfulWithImpact = attempts.filter(a =>
         a.buyer_address === stat.buyer &&
         a.destination_token === stat.destinationToken &&
@@ -119,7 +110,7 @@ export default async function handler(req, res) {
       return stat;
     }).sort((a, b) => b.totalAttempts - a.totalAttempts);
 
-    // Group by day for timeline
+    
     const dailyStats = {};
     attempts.forEach(attempt => {
       const date = attempt.attempt_timestamp.split('T')[0];
@@ -140,13 +131,13 @@ export default async function handler(req, res) {
       }
     });
 
-    // Calculate success rates for each day
+    
     const dailyTimeline = Object.values(dailyStats).map(day => {
       day.successRate = day.total > 0 ? ((day.successful / day.total) * 100).toFixed(2) : 0;
       return day;
     }).sort((a, b) => a.date.localeCompare(b.date));
 
-    // Group errors by message
+    
     const errorStats = {};
     attempts.filter(a => !a.success && a.error_message).forEach(attempt => {
       const msg = attempt.error_message;
@@ -169,14 +160,14 @@ export default async function handler(req, res) {
       lastOccurrence: stat.lastOccurrence
     })).sort((a, b) => b.count - a.count).slice(0, 10);
 
-    // Router usage statistics
+    
     const routerStats = {};
     attempts.filter(a => a.success && a.router_used).forEach(attempt => {
       const router = attempt.router_used;
       routerStats[router] = (routerStats[router] || 0) + 1;
     });
 
-    // Return comprehensive statistics
+    
     return res.status(200).json({
       success: true,
       data: {

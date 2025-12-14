@@ -8,7 +8,7 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const VISUALIZER_PASSWORD = "VizPass157@";
 const CHUNK_SIZE = 5000;
 const START_BLOCK = 28_000_000;
-const MAX_BLOCKS_PER_REQUEST = 20000; // Limit to avoid timeout
+const MAX_BLOCKS_PER_REQUEST = 20000; 
 
 const CONTRACT_ABI = [
   "event RegisteredDCASession(address indexed buyer, address indexed sourceToken, address indexed destinationToken, uint256 amountPerDay, uint256 daysLeft, uint256 buyTime, bool isNativeETH)",
@@ -124,7 +124,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Limit blocks per request to avoid timeout
+    
     const syncToBlock = Math.min(lastSyncedBlock + MAX_BLOCKS_PER_REQUEST, currentBlock);
     const blocksToSync = syncToBlock - lastSyncedBlock;
 

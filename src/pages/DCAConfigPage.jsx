@@ -33,7 +33,7 @@ export default function DCAConfigPage({
   const finalFee = Math.max(fee, minFee || 0.00005);
   const calculatedFee = `${formatNumber(finalFee)} ${selectedPair.source.symbol}`;
 
-  // Fetch price impact when amount changes
+  
   useEffect(() => {
     const fetchImpact = async () => {
       if (!amountPerDay || parseFloat(amountPerDay) <= 0) {
@@ -65,7 +65,7 @@ export default function DCAConfigPage({
       }
     };
 
-    // Debounce the fetch (increased to reduce RPC calls)
+    
     const timeoutId = setTimeout(fetchImpact, 1500);
     return () => clearTimeout(timeoutId);
   }, [amountPerDay, selectedPair]);
@@ -80,25 +80,25 @@ export default function DCAConfigPage({
 
   return (
     <>
-      {/* Loading Overlay */}
+      {}
       {loading && (
         <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-2xl max-w-md mx-4 border border-gray-200 dark:border-gray-700">
             <div className="flex flex-col items-center">
-              {/* Animated Spinner */}
+              {}
               <div className="relative w-20 h-20 mb-6">
                 <div className="absolute inset-0 border-4 border-purple-200 dark:border-purple-900 rounded-full"></div>
                 <div className="absolute inset-0 border-4 border-transparent border-t-purple-600 dark:border-t-purple-400 rounded-full animate-spin"></div>
                 <div className="absolute inset-2 border-4 border-transparent border-t-pink-500 dark:border-t-pink-400 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
               </div>
 
-              {/* Loading Text */}
+              {}
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Registering DCA</h3>
               <p className="text-gray-600 dark:text-gray-300 text-center mb-4">
                 Please confirm the transaction in your wallet
               </p>
 
-              {/* Processing Steps */}
+              {}
               <div className="w-full mt-4">
                 <div className="flex items-center justify-center gap-3 text-sm text-gray-700 dark:text-gray-300">
                   <div className="w-2 h-2 bg-purple-600 dark:bg-purple-400 rounded-full animate-pulse"></div>
@@ -111,7 +111,7 @@ export default function DCAConfigPage({
       )}
 
       <div className="max-w-2xl mx-auto">
-        {/* Back Button */}
+        {}
         <button
           onClick={onBack}
           className="mb-6 flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 font-medium transition-colors"
@@ -122,7 +122,7 @@ export default function DCAConfigPage({
           Back to selection
         </button>
 
-      {/* Header */}
+      {}
       <div className={`rounded-t-2xl p-6 text-white ${isExemptedFromFees ? 'bg-gradient-to-r from-green-600 to-green-700 dark:from-green-700 dark:to-green-800' : 'bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-700 dark:to-purple-800'}`}>
         <div className="flex items-center justify-between">
           <div>
@@ -141,7 +141,7 @@ export default function DCAConfigPage({
         </div>
       </div>
 
-      {/* Stats Card */}
+      {}
       <div className="bg-white dark:bg-gray-800 border-x border-purple-200 dark:border-gray-700 p-6">
         <TokenStatsCard
           tokenSymbol={selectedPair.destinationKey}
@@ -149,9 +149,9 @@ export default function DCAConfigPage({
         />
       </div>
 
-      {/* Configuration Form */}
+      {}
       <div className="bg-white dark:bg-gray-800 rounded-b-2xl border border-t-0 border-purple-200 dark:border-gray-700 p-6 shadow-lg">
-        {/* Amount Per Day */}
+        {}
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
             Daily Spending Amount ({selectedPair.source.symbol})
@@ -174,7 +174,7 @@ export default function DCAConfigPage({
             </p>
           )}
 
-          {/* Price Impact Display - Right under amount input */}
+          {}
           {amountPerDay && parseFloat(amountPerDay) > 0 && (
             <div className="mt-3 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
               <div className="flex items-center justify-between mb-2">
@@ -211,7 +211,7 @@ export default function DCAConfigPage({
                 </div>
               ) : priceImpactData ? (
                 <div className="space-y-3">
-                  {/* Warning Banner */}
+                  {}
                   <div className="p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                     <div className="flex items-start gap-2">
                       <svg className="w-4 h-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -226,9 +226,9 @@ export default function DCAConfigPage({
                     </div>
                   </div>
 
-                  {/* Expected Metrics Grid */}
+                  {}
                   <div className="grid grid-cols-2 gap-3">
-                    {/* Expected Price Impact */}
+                    {}
                     <div className="bg-gradient-to-br from-white to-blue-50 dark:from-gray-700 dark:to-blue-900/30 rounded-lg p-2.5 border border-blue-200 dark:border-blue-800">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <svg className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,7 +254,7 @@ export default function DCAConfigPage({
                       </div>
                     </div>
 
-                    {/* Expected Slippage */}
+                    {}
                     <div className="bg-gradient-to-br from-white to-purple-50 dark:from-gray-700 dark:to-purple-900/30 rounded-lg p-2.5 border border-purple-200 dark:border-purple-800">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <svg className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -279,7 +279,7 @@ export default function DCAConfigPage({
                     </div>
                   </div>
 
-                  {/* Expected Output */}
+                  {}
                   <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-2.5 border border-green-200 dark:border-green-800">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Expected Output:</span>
@@ -297,7 +297,7 @@ export default function DCAConfigPage({
                     )}
                   </div>
 
-                  {/* Warning for extreme negative impact */}
+                  {}
                   {getPriceImpactSeverity(priceImpactData.priceImpact) === 'extreme' && priceImpactData.priceImpact < 0 && (
                     <div className="p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                       <p className="text-xs text-red-700 dark:text-red-400">
@@ -311,7 +311,7 @@ export default function DCAConfigPage({
           )}
         </div>
 
-        {/* Total DCA Days */}
+        {}
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
             Total DCA Days
@@ -327,7 +327,7 @@ export default function DCAConfigPage({
           />
         </div>
 
-        {/* Allocation Summary */}
+        {}
         <div className="mb-6 bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
           <p className="text-sm text-gray-700 dark:text-gray-200 mb-4 font-medium">
             Total DCA Plan: Spend <span className="text-purple-600 dark:text-purple-400 font-bold">{isNaN(totalAmount) ? "-" : formatNumber(totalAmount)} {selectedPair.source.symbol}</span> to buy <span className="text-purple-600 dark:text-purple-400 font-bold">{selectedPair.destination.symbol}</span>
@@ -358,7 +358,7 @@ export default function DCAConfigPage({
             </div>
           </div>
 
-          {/* Fee Exemption Badge */}
+          {}
           {isExemptedFromFees && (
             <div className="mt-4 pt-4 border-t border-purple-200 dark:border-purple-800 flex items-center gap-2">
               <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
@@ -371,7 +371,7 @@ export default function DCAConfigPage({
           )}
         </div>
 
-        {/* Daily Buy Time */}
+        {}
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
             Daily Buy Time (Your Local Time)
@@ -395,7 +395,7 @@ export default function DCAConfigPage({
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {}
         <div className="space-y-3">
           {needsApproval && (
             <button

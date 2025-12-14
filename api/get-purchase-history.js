@@ -4,7 +4,7 @@ import { getCachedEvents } from "../lib/cache.js";
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const RPC_URL = process.env.RPC_URL;
 const RECENT_BLOCKS_WINDOW = 50000;
-const CHUNK_SIZE = 10000; // RPC provider limit
+const CHUNK_SIZE = 10000; 
 const CONTRACT_ABI = [
   "event PurchaseExecuted(address indexed buyer, address indexed sourceToken, address indexed destinationToken, uint256 amountIn, uint256 amountOut, uint256 daysLeft)"
 ];
@@ -98,7 +98,7 @@ async function fetchUserPurchaseEvents(contract, userAddress, provider) {
         const events = await contract.queryFilter(filter, currentFrom, currentTo);
         recentEvents.push(...events.map(e => extractEventData(e)));
 
-        // Small delay to avoid rate limiting
+        
         if (currentTo < currentBlock) {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
@@ -146,7 +146,7 @@ export default async function handler(req, res) {
       uniqueTokens.add(e.destinationToken);
     });
 
-    // Fetch token info sequentially with delays to avoid rate limiting
+    
     for (const addr of Array.from(uniqueTokens)) {
       await getTokenInfo(addr, provider);
       await new Promise(resolve => setTimeout(resolve, 150));
@@ -163,7 +163,7 @@ export default async function handler(req, res) {
           blockCache.set(blockNum, block.timestamp);
         }
 
-        // Add delay to avoid rate limiting (aiming for ~6 requests/second to be safe)
+        
         if (i < uniqueBlocks.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 150));
         }
@@ -173,7 +173,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fetch price impact data for all transactions
+    
     const txHashes = userEvents.map(e => e.txHash.toLowerCase());
     let priceImpactMap = new Map();
 

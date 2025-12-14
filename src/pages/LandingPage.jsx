@@ -4,7 +4,7 @@ import ThemeToggle from "../components/ThemeToggle";
 export default function LandingPage({ onConnect }) {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
-      {/* Navigation Bar */}
+      {}
       <nav className="border-b border-gray-100 dark:border-gray-800">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
@@ -15,7 +15,7 @@ export default function LandingPage({ onConnect }) {
               </span>
             </div>
             <div className="flex items-center gap-4">
-              {/* Social Links */}
+              {}
               <div className="flex items-center gap-3">
                 <a
                   href="https://t.me/+qzZO0ePqZts3YmQ0"
@@ -61,11 +61,11 @@ export default function LandingPage({ onConnect }) {
         </div>
       </nav>
 
-      {/* Hero Section */}
+      {}
       <section className="relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 py-24 lg:py-32">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left Content */}
+            {}
             <div>
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-full text-sm font-medium text-purple-700 dark:text-purple-300 mb-6">
                 <span className="w-2 h-2 bg-purple-600 dark:bg-purple-400 rounded-full animate-pulse"></span>
@@ -90,7 +90,7 @@ export default function LandingPage({ onConnect }) {
                 </button>
               </div>
 
-              {/* Key Metrics */}
+              {}
               <div className="grid grid-cols-3 gap-6 pt-8 border-t border-gray-200 dark:border-gray-700">
                 <div>
                   <p className="text-3xl font-bold text-gray-900 dark:text-white">100%</p>
@@ -107,7 +107,7 @@ export default function LandingPage({ onConnect }) {
               </div>
             </div>
 
-            {/* Right Visual */}
+            {}
             <div className="relative">
               <div className="relative z-10 bg-gradient-to-br from-purple-600 via-purple-700 to-pink-600 rounded-3xl p-8 shadow-2xl">
                 <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
@@ -142,19 +142,19 @@ export default function LandingPage({ onConnect }) {
                   </div>
                 </div>
 
-                {/* Floating Elements */}
+                {}
                 <div className="absolute -top-6 -right-6 w-32 h-32 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl opacity-20 blur-2xl"></div>
                 <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl opacity-20 blur-2xl"></div>
               </div>
 
-              {/* Background Decoration */}
+              {}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-br from-purple-200 to-pink-200 rounded-3xl -z-10 blur-3xl opacity-30"></div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
+      {}
       <section className="py-24 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
@@ -167,7 +167,7 @@ export default function LandingPage({ onConnect }) {
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
-            {/* Feature 1 */}
+            {}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm hover:shadow-xl transition-shadow border border-gray-100 dark:border-gray-700">
               <div className="w-14 h-14 bg-gradient-to-br from-purple-600 to-purple-700 dark:from-purple-500 dark:to-purple-600 rounded-xl flex items-center justify-center mb-6">
                 <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,7 +180,7 @@ export default function LandingPage({ onConnect }) {
               </p>
             </div>
 
-            {/* Feature 2 */}
+            {}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm hover:shadow-xl transition-shadow border border-gray-100 dark:border-gray-700">
               <div className="w-14 h-14 bg-gradient-to-br from-pink-600 to-pink-700 dark:from-pink-500 dark:to-pink-600 rounded-xl flex items-center justify-center mb-6">
                 <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,7 +193,7 @@ export default function LandingPage({ onConnect }) {
               </p>
             </div>
 
-            {/* Feature 3 */}
+            {}
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm hover:shadow-xl transition-shadow border border-gray-100 dark:border-gray-700">
               <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-xl flex items-center justify-center mb-6">
                 <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -209,7 +209,7 @@ export default function LandingPage({ onConnect }) {
         </div>
       </section>
 
-      {/* How It Works */}
+      {}
       <section className="py-24 bg-white dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
@@ -267,7 +267,7 @@ export default function LandingPage({ onConnect }) {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {}
       <section className="py-24 bg-gradient-to-br from-purple-600 via-purple-700 to-pink-600">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-4xl lg:text-5xl font-bold text-white mb-6">
@@ -285,7 +285,7 @@ export default function LandingPage({ onConnect }) {
         </div>
       </section>
 
-      {/* Footer */}
+      {}
       <footer className="border-t border-gray-200 dark:border-gray-800 py-12 bg-white dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">

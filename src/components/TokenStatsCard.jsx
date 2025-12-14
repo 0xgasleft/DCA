@@ -151,7 +151,7 @@ export default function TokenStatsCard({ tokenSymbol, sourceSymbol, compact = fa
         </button>
       </div>
 
-      {/* DCA Stats Grid */}
+      {}
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border-l-4 border-purple-500 dark:border-purple-400">
           <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Volume Registered</p>
@@ -178,7 +178,7 @@ export default function TokenStatsCard({ tokenSymbol, sourceSymbol, compact = fa
         </div>
       </div>
 
-      {/* Powered by Relay */}
+      {}
       <div className="mt-4 p-4 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg shadow-md">
         <div className="flex items-center justify-center gap-3">
           <div className="text-center">
@@ -193,7 +193,7 @@ export default function TokenStatsCard({ tokenSymbol, sourceSymbol, compact = fa
         </div>
       </div>
 
-      {/* Cache Info */}
+      {}
       {stats.cached && (
         <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
           ⚡ Cached {stats.cacheAge}s ago • Updates in real-time

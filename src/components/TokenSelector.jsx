@@ -53,7 +53,7 @@ export default function TokenSelector({ onSelectionChange }) {
       <h3 className="text-lg font-semibold text-purple-800 mb-3">Select Token Pair</h3>
 
       <div className="grid grid-cols-2 gap-4">
-        {/* Source Token (What you're spending) */}
+        {}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Spend (Source)
@@ -71,7 +71,7 @@ export default function TokenSelector({ onSelectionChange }) {
           </select>
         </div>
 
-        {/* Destination Token (What you're buying) */}
+        {}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Buy (Destination)

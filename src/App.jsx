@@ -25,7 +25,7 @@ const RPC_URL = import.meta.env.VITE_RPC_URL;
 
 
 const LOCAL_HARDHAT_CHAIN = {
-  chainId: "0x7a69", // 31337
+  chainId: "0x7a69", 
   chainName: "Hardhat Local",
   nativeCurrency: {
     name: "Ether",
@@ -37,7 +37,7 @@ const LOCAL_HARDHAT_CHAIN = {
 };
 
 const INK_CHAIN = {
-  chainId: "0xdef1", // 57073
+  chainId: "0xdef1", 
   chainName: "Ink",
   nativeCurrency: {
     name: "Ether",
@@ -89,7 +89,7 @@ const switchToInk = async () => {
 export default function App() {
   inject();
 
-  // Check if we're on the visualizer route
+  
   const [currentRoute, setCurrentRoute] = useState(window.location.pathname);
 
   const [walletConnected, setWalletConnected] = useState(false);
@@ -117,13 +117,13 @@ export default function App() {
   const [approvalGranted, setApprovalGranted] = useState(false);
   const [isExemptedFromFees, setIsExemptedFromFees] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [isConnecting, setIsConnecting] = useState(false); // Flag to prevent auto-connect during signature
+  const [isConnecting, setIsConnecting] = useState(false); 
 
   const provider = window.ethereum ? new ethers.BrowserProvider(window.ethereum) : null;
   const contract = provider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider) : null;
   const formatAddress = (addr) => addr.slice(0, 6) + "..." + addr.slice(-4);
 
-  // Handle route changes
+  
   useEffect(() => {
     const handleRouteChange = () => {
       setCurrentRoute(window.location.pathname);
@@ -400,7 +400,7 @@ export default function App() {
             source.decimals
           );
 
-          // Calculate fee (0 if user is exempted)
+          
           let feeAmount = BigInt(0);
 
           if (!isExemptedFromFees) {
@@ -667,14 +667,14 @@ export default function App() {
 
       const totalApproval = dcaTotal + fee;
 
-      // Check current allowance first
+      
       const userAddress = await signer.getAddress();
       const currentAllowance = await tokenContract.allowance(userAddress, CONTRACT_ADDRESS);
 
       if (currentAllowance >= totalApproval) {
-        // Already approved!
+        
         setApprovalGranted(true);
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Show green button for 1.5s
+        await new Promise(resolve => setTimeout(resolve, 1500)); 
         toast.success("Approval already granted!");
         setNeedsApproval(false);
         setApprovalGranted(false);
@@ -682,7 +682,7 @@ export default function App() {
         return;
       }
 
-      // Need to approve
+      
       if (isExemptedFromFees) {
         console.log(`Approving ${ethers.formatUnits(totalApproval, source.decimals)} ${source.symbol} (DCA only, no fee - wallet is exempt)`);
       } else {
@@ -700,9 +700,9 @@ export default function App() {
         }
       );
 
-      // Transaction confirmed - show green button animation
+      
       setApprovalGranted(true);
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Show green button for 1.5s
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
       setNeedsApproval(false);
       setApprovalGranted(false);
     } catch (err) {
@@ -783,7 +783,7 @@ export default function App() {
         const dcaTotal = amountWei * daysNum;
         let total = dcaTotal;
 
-        // Only add fee if user is NOT exempted
+        
         if (!isExemptedFromFees) {
           const zeroPointOnePercent = dcaTotal / BigInt(1000);
           const minFeeWei = ethers.parseEther(minFee != null ? minFee.toFixed(18) : "0.00005");
@@ -958,7 +958,7 @@ export default function App() {
   };
 
 
-  // If we're on the visualizer route, show visualizer page
+  
   if (currentRoute === '/visualizer') {
     return (
       <>
@@ -984,10 +984,10 @@ export default function App() {
         )
       ) : (
         <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 transition-colors duration-200">
-      {/* Header with wallet info and disconnect */}
+      {}
       <div className="max-w-6xl mx-auto mb-6">
         <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md border border-gray-200 dark:border-gray-700">
-          {/* Logo */}
+          {}
           <button
             onClick={disconnectWallet}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
@@ -997,9 +997,9 @@ export default function App() {
             <span className="text-xl font-bold text-gray-900 dark:text-white">DCA on <span className="text-purple-600 dark:text-purple-400">Ink</span></span>
           </button>
 
-          {/* Wallet Info and Theme Toggle */}
+          {}
           <div className="flex items-center gap-4">
-            {/* Social Links */}
+            {}
             <div className="flex items-center gap-3">
               <a
                 href="https://t.me/+qzZO0ePqZts3YmQ0"
@@ -1048,7 +1048,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {}
       <div className="max-w-6xl mx-auto mb-6">
         <div className="flex flex-col sm:flex-row gap-4 justify-center bg-gradient-to-r from-purple-50 to-pink-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl p-4 shadow-lg border border-purple-100 dark:border-gray-600">
           <button
@@ -1157,12 +1157,12 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {}
       <div className="max-w-6xl mx-auto">
-        {/* HALL OF FAME TAB */}
+        {}
         {activeTab === "hallOfFame" && <HallOfFamePage />}
 
-        {/* REGISTER TAB */}
+        {}
         {activeTab === "register" && (
           <>
             {!selectedTokenPair ? (
@@ -1186,12 +1186,12 @@ export default function App() {
           </>
         )}
 
-        {/* ACTIVE SESSION TAB */}
+        {}
         {activeTab === "activeSession" && (
           <div className="max-w-6xl mx-auto px-4">
             {dcaSessions.length > 0 ? (
               <div className="space-y-6">
-                {/* Header */}
+                {}
                 <div className="flex items-center justify-between mb-8">
                   <div>
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Active Strategies</h2>
@@ -1203,7 +1203,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Sessions Grid */}
+                {}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {dcaSessions.map((session) => {
 
@@ -1237,7 +1237,7 @@ export default function App() {
                         key={session.destinationToken}
                         className="bg-gradient-to-br from-white to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-3xl border-2 border-purple-200 dark:border-gray-600 p-6 shadow-xl dark:shadow-gray-900/50 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]"
                       >
-                        {/* Token Pair Header */}
+                        {}
                         <div className="flex items-center gap-4 mb-6 pb-6 border-b border-purple-200 dark:border-gray-600">
                           <div className="flex items-center -space-x-3">
                             {sourceTokenLogo ? (
@@ -1282,9 +1282,9 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Stats Grid */}
+                        {}
                         <div className="grid grid-cols-2 gap-4 mb-6">
-                          {/* Daily Amount */}
+                          {}
                           <div className="bg-white dark:bg-gray-700 rounded-xl p-4 border border-purple-100 dark:border-gray-600">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -1298,7 +1298,7 @@ export default function App() {
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{sourceTokenName}</p>
                           </div>
 
-                          {/* Days Remaining */}
+                          {}
                           <div className="bg-white dark:bg-gray-700 rounded-xl p-4 border border-purple-100 dark:border-gray-600">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
@@ -1312,7 +1312,7 @@ export default function App() {
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">remaining</p>
                           </div>
 
-                          {/* Total Value */}
+                          {}
                           <div className="col-span-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-4 text-white">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -1327,7 +1327,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Next Purchase Progress */}
+                        {}
                         <div className="bg-white dark:bg-gray-700 rounded-xl p-4 border border-purple-100 dark:border-gray-600 mb-6">
                           <div className="flex items-center justify-between mb-3">
                             <div>
@@ -1346,7 +1346,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Action Button */}
+                        {}
                         <button
                           onClick={() => stopDCA(session.destinationToken)}
                           disabled={stopping && stoppingToken === session.destinationToken}
@@ -1392,7 +1392,7 @@ export default function App() {
           </div>
         )}
 
-        {/* DCA HISTORY TAB */}
+        {}
         {activeTab === "history" && (
           <div className="max-w-6xl mx-auto px-4">
             {fetchingPurchases ? (
@@ -1412,7 +1412,7 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Header */}
+                
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Purchase History</h2>
@@ -1420,7 +1420,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Purchase Cards */}
+                
                 <div className="grid gap-4">
                   {activePurchases.map(({ amountIn, amountOut, sourceToken, destinationToken, txHash, datetime, priceImpact, slippagePercent }, i) => (
                     <div
@@ -1428,7 +1428,7 @@ export default function App() {
                       className="bg-gradient-to-br from-white to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl border-2 border-purple-200 dark:border-gray-600 p-6 shadow-lg dark:shadow-gray-900/50 hover:shadow-xl transition-all duration-200 hover:scale-[1.01]"
                     >
                       <div className="flex items-start justify-between mb-4">
-                        {/* Swap Visual */}
+                        
                         <div className="flex items-center gap-4 flex-1">
                           <div className="flex flex-col items-center">
                             <div className="bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 rounded-xl px-4 py-3 min-w-[120px]">
@@ -1453,7 +1453,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Date Badge */}
+                        
                         <div className="bg-purple-100 dark:bg-purple-900/30 px-3 py-1 rounded-full">
                           <p className="text-xs text-purple-700 dark:text-purple-300 font-semibold">
                             {new Date(datetime).toLocaleDateString()}
@@ -1461,11 +1461,11 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Execution Metrics */}
+                      
                       <div className="mt-4 pt-4 border-t border-purple-200 dark:border-gray-600">
                         {priceImpact !== null && priceImpact !== undefined ? (
                           <div className="space-y-3">
-                            {/* Header with info */}
+                            
                             <div className="flex items-center justify-between">
                               <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200">Execution Metrics</h4>
                               <div className="group relative">
@@ -1479,7 +1479,7 @@ export default function App() {
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
-                              {/* Price Impact */}
+                              
                               <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 rounded-lg p-3">
                                 <div className="flex items-center gap-2 mb-2">
                                   <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1505,7 +1505,7 @@ export default function App() {
                               </div>
                             </div>
 
-                              {/* Slippage */}
+                              
                               <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 rounded-lg p-3">
                                 <div className="flex items-center gap-2 mb-2">
                                   <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1547,7 +1547,7 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Footer */}
+                      
                       <div className="flex items-center justify-between pt-4 border-t border-purple-200 dark:border-gray-600 mt-4">
                         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

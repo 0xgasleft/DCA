@@ -5,7 +5,7 @@ export default function ClockTimePicker({ value, onChange }) {
   const [hour, minute] = value.split(':').map(Number);
   const pickerRef = useRef(null);
 
-  // Close picker when clicking outside
+  
   useEffect(() => {
     function handleClickOutside(event) {
       if (pickerRef.current && !pickerRef.current.contains(event.target)) {
@@ -34,12 +34,12 @@ export default function ClockTimePicker({ value, onChange }) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   };
 
-  // Generate 15-minute intervals
+  
   const minuteIntervals = [0, 15, 30, 45];
 
   return (
     <div className="relative" ref={pickerRef}>
-      {/* Display Button */}
+      {}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -56,11 +56,11 @@ export default function ClockTimePicker({ value, onChange }) {
         </svg>
       </button>
 
-      {/* Clock Picker Dropdown */}
+      {}
       {isOpen && (
         <div className="absolute z-50 mt-2 w-full bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 transition-all duration-200 ease-out opacity-100 scale-100">
           <div className="flex gap-6">
-            {/* Hour Selector */}
+            {}
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3 text-center">Hour</h3>
               <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto">
@@ -81,10 +81,10 @@ export default function ClockTimePicker({ value, onChange }) {
               </div>
             </div>
 
-            {/* Divider */}
+            {}
             <div className="w-px bg-gray-200 dark:bg-gray-700"></div>
 
-            {/* Minute Selector */}
+            {}
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3 text-center">Minute</h3>
               <div className="grid grid-cols-2 gap-2">
@@ -106,7 +106,7 @@ export default function ClockTimePicker({ value, onChange }) {
             </div>
           </div>
 
-          {/* Current Selection Display */}
+          {}
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <div className="text-center">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Selected Time</p>
@@ -114,7 +114,7 @@ export default function ClockTimePicker({ value, onChange }) {
             </div>
           </div>
 
-          {/* Done Button */}
+          {}
           <button
             type="button"
             onClick={() => setIsOpen(false)}

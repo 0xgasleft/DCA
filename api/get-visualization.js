@@ -136,20 +136,20 @@ export default async function handler(req, res) {
 
     console.log(`Processing ${registrationEvents.length} registrations, ${purchaseEvents.length} purchases, ${destroyEvents.length} cancellations`);
 
-    // Query live contract state for accurate active sessions
+    
     console.log("Querying live contract state...");
     const registeredBuyers = await contract.getRegisteredBuyers();
     console.log(`Live registered buyers from contract: ${registeredBuyers.length}`);
 
-    // Get actual active sessions and unique destination tokens per buyer
-    const liveActiveSessions = new Map(); // buyer -> Set of destination tokens
+    
+    const liveActiveSessions = new Map(); 
     const uniqueActiveWallets = new Set();
 
     for (const buyer of registeredBuyers) {
       uniqueActiveWallets.add(buyer.toLowerCase());
 
-      // Get all destination tokens this buyer has registered for
-      // We need to check from registration events which tokens they've used
+      
+      
       const buyerLower = buyer.toLowerCase();
       const buyerDestTokens = new Set();
 
@@ -159,13 +159,13 @@ export default async function handler(req, res) {
         }
       }
 
-      // For each destination token, check if session is still active
+      
       for (const destToken of buyerDestTokens) {
         try {
           const config = await contract.getDCAConfig(buyer, destToken);
           const daysLeft = Number(config.days_left);
 
-          // Only count as active if days_left > 0
+          
           if (daysLeft > 0) {
             if (!liveActiveSessions.has(buyerLower)) {
               liveActiveSessions.set(buyerLower, new Set());
@@ -173,13 +173,13 @@ export default async function handler(req, res) {
             liveActiveSessions.get(buyerLower).add(destToken);
           }
         } catch (err) {
-          // Session doesn't exist or was destroyed
+          
           console.log(`No active session for ${buyer} -> ${destToken}`);
         }
       }
     }
 
-    // Count total active sessions
+    
     let totalActiveSessions = 0;
     liveActiveSessions.forEach((tokenSet, buyer) => {
       console.log(`  Buyer ${buyer}: ${tokenSet.size} active session(s) - tokens: ${Array.from(tokenSet).join(', ')}`);
@@ -190,7 +190,7 @@ export default async function handler(req, res) {
     console.log(`Live unique active wallets: ${uniqueActiveWallets.size}`);
     console.log(`Breakdown: ${uniqueActiveWallets.size} buyers with ${totalActiveSessions} total active sessions`);
 
-    // Track ALL unique wallets who have ever registered (historical)
+    
     const uniqueLifetimeWallets = new Set();
     const volumeBySourceToken = new Map();
     const volumeByDestinationToken = new Map();
@@ -268,7 +268,7 @@ export default async function handler(req, res) {
       dailyActivity.get(date).purchases += 1;
     }
 
-    // Fetch contract balances for each source token
+    
     console.log("Fetching contract balances for source tokens...");
     const contractBalances = new Map();
 
@@ -276,10 +276,10 @@ export default async function handler(req, res) {
       try {
         let balance;
         if (data.address === '0x0000000000000000000000000000000000000000') {
-          // For native ETH, get the provider balance
+          
           balance = await provider.getBalance(CONTRACT_ADDRESS);
         } else {
-          // For ERC20 tokens
+          
           const tokenContract = new ethers.Contract(data.address, ERC20_ABI, provider);
           balance = await tokenContract.balanceOf(CONTRACT_ADDRESS);
         }
@@ -329,7 +329,7 @@ export default async function handler(req, res) {
 
     console.log(`Lifetime unique wallets: ${uniqueLifetimeWallets.size}`);
 
-    // Fetch owner address and ETH balance
+    
     console.log("Fetching contract owner and balance...");
     let ownerAddress;
     let ownerBalance = '0';
@@ -346,11 +346,11 @@ export default async function handler(req, res) {
 
     const visualizationData = {
       overview: {
-        uniqueWallets: uniqueLifetimeWallets.size, // Total unique wallets who have ever used the platform
-        activeWallets: uniqueActiveWallets.size, // Currently active wallets
+        uniqueWallets: uniqueLifetimeWallets.size, 
+        activeWallets: uniqueActiveWallets.size, 
         totalRegistrations,
         totalPurchasesExecuted,
-        totalActiveSessions, // Already calculated from live contract state
+        totalActiveSessions, 
         totalCancelledSessions: destroyEvents.length,
         totalTokenPairs: tokenPairsArray.length,
         completionRate: totalRegistrations > 0

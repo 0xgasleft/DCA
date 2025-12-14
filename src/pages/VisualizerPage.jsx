@@ -1,34 +1,34 @@
 import { useState, useEffect } from "react";
 
-// Smart number formatter that handles very small decimals (like KBTC)
+
 function formatTokenAmount(value, decimals = 18) {
   const num = parseFloat(value);
 
   if (num === 0) return "0";
   if (isNaN(num)) return "0";
 
-  // For very small numbers (like 0.000000123)
+  
   if (num < 0.0001) {
-    // Find first significant digit
+    
     const scientificNotation = num.toExponential();
     const [coefficient, exponent] = scientificNotation.split('e');
     const exp = parseInt(exponent);
 
     if (exp < -4) {
-      // Use scientific notation for very small numbers
+      
       return num.toExponential(4);
     }
 
-    // Show up to 8 significant decimals
+    
     return num.toFixed(8).replace(/\.?0+$/, '');
   }
 
-  // For normal numbers
+  
   if (num < 1) return num.toFixed(6).replace(/\.?0+$/, '');
   if (num < 100) return num.toFixed(4).replace(/\.?0+$/, '');
   if (num < 10000) return num.toFixed(2);
 
-  // For large numbers, use compact notation
+  
   return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
@@ -92,7 +92,7 @@ export default function VisualizerPage() {
       setIsAuthenticated(true);
       sessionStorage.setItem("vizPassword", password);
 
-      // Fetch attempt statistics
+      
       await fetchAttemptStats(password);
     } catch (err) {
       setError(err.message);
@@ -120,7 +120,7 @@ export default function VisualizerPage() {
       const vizData = await response.json();
       setData(vizData);
 
-      // Also refresh attempt stats
+      
       await fetchAttemptStats(storedPassword);
     } catch (err) {
       setError(err.message);
@@ -243,7 +243,7 @@ export default function VisualizerPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
+      {}
       <div className="bg-gradient-to-r from-purple-600 via-purple-700 to-pink-600 text-white shadow-xl">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
@@ -293,7 +293,7 @@ export default function VisualizerPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Owner Balance Alert */}
+        {}
         {metadata?.ownerBalance && (() => {
           const balance = parseFloat(metadata.ownerBalance);
           let bgColor, borderColor, textColor, icon, message;
@@ -353,7 +353,7 @@ export default function VisualizerPage() {
           );
         })()}
 
-        {/* Key Metrics Grid */}
+        {}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-purple-500 hover:shadow-xl transition-shadow">
             <div className="flex items-start justify-between">
@@ -422,7 +422,7 @@ export default function VisualizerPage() {
           </div>
         </div>
 
-        {/* Secondary Stats */}
+        {}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
             <p className="text-sm opacity-90 mb-2">Unique Trading Pairs</p>
@@ -443,7 +443,7 @@ export default function VisualizerPage() {
           </div>
         </div>
 
-        {/* Contract Balances Section */}
+        {}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="bg-gradient-to-br from-green-500 to-green-600 p-2 rounded-lg">
@@ -482,7 +482,7 @@ export default function VisualizerPage() {
           </div>
         </div>
 
-        {/* DCA Execution Attempts Section */}
+        {}
         {attemptStats && (
           <div className="mb-8">
             <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
@@ -495,7 +495,7 @@ export default function VisualizerPage() {
                 <h2 className="text-xl font-bold text-gray-900">DCA Execution Reliability (Last 30 Days)</h2>
               </div>
 
-              {/* Execution Overview Stats */}
+              {}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-4 border border-indigo-200">
                   <p className="text-sm text-indigo-600 font-medium mb-1">Total Attempts</p>
@@ -517,7 +517,7 @@ export default function VisualizerPage() {
                 </div>
               </div>
 
-              {/* Daily Timeline */}
+              {}
               {attemptStats.dailyTimeline && attemptStats.dailyTimeline.length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">Daily Success Rate</h3>
@@ -545,9 +545,9 @@ export default function VisualizerPage() {
               )}
             </div>
 
-            {/* Top Errors and Router Stats Grid */}
+            {}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* Top Errors */}
+              {}
               {attemptStats.topErrors && attemptStats.topErrors.length > 0 && (
                 <div className="bg-white rounded-2xl shadow-lg p-6">
                   <div className="flex items-center gap-3 mb-4">
@@ -572,7 +572,7 @@ export default function VisualizerPage() {
                 </div>
               )}
 
-              {/* Router Usage Stats */}
+              {}
               {attemptStats.routerStats && Object.keys(attemptStats.routerStats).length > 0 && (
                 <div className="bg-white rounded-2xl shadow-lg p-6">
                   <div className="flex items-center gap-3 mb-4">
@@ -612,7 +612,7 @@ export default function VisualizerPage() {
               )}
             </div>
 
-            {/* Per-Buyer Token Stats */}
+            {}
             {attemptStats.buyerTokenStats && attemptStats.buyerTokenStats.length > 0 && (
               <div className="bg-white rounded-2xl shadow-lg p-6">
                 <div className="flex items-center gap-3 mb-4">
@@ -670,9 +670,9 @@ export default function VisualizerPage() {
           </div>
         )}
 
-        {/* Token Volumes Section */}
+        {}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Source Tokens */}
+          {}
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-2 rounded-lg">
@@ -721,7 +721,7 @@ export default function VisualizerPage() {
             </div>
           </div>
 
-          {/* Destination Tokens */}
+          {}
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-2 rounded-lg">
@@ -766,7 +766,7 @@ export default function VisualizerPage() {
           </div>
         </div>
 
-        {/* Popular Trading Pairs */}
+        {}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="bg-gradient-to-br from-green-500 to-green-600 p-2 rounded-lg">
@@ -790,7 +790,7 @@ export default function VisualizerPage() {
           </div>
         </div>
 
-        {/* Daily Activity Chart */}
+        {}
         {dailyActivity.length > 0 && (
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <div className="flex items-center gap-3 mb-6">

@@ -1,9 +1,6 @@
 import { supabase } from "../lib/supabase.js";
 
-/**
- * Store price impact data for a transaction
- * This endpoint is called by the DCA executor to log actual price impact
- */
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
@@ -16,7 +13,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Store in Supabase
+    
     const { data, error } = await supabase
       .from('price_impact_cache')
       .upsert({

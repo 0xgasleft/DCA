@@ -45,7 +45,7 @@ async function getTokenInfo(tokenAddress, provider) {
 
 async function getEthPrice() {
   try {
-    // Using CoinGecko API (free, no auth needed)
+    
     const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
     const data = await response.json();
     return data.ethereum?.usd;
@@ -75,8 +75,8 @@ function calculateScore(userData, ethPrice) {
 
 
 
-  // Volume is the primary driver - use square root to spread the range better
-  // $1 = 10 points, $100 = 100 points, $10,000 = 1000 points
+  
+  
   const volumeScore = Math.sqrt(totalUsdVolume) * 10;
 
   const completionRate = userData.totalDaysPlanned > 0
@@ -97,19 +97,19 @@ function calculateScore(userData, ethPrice) {
 
   const commitmentScore = Math.min(avgDaysPerSession * 2, 50);
 
-  // Completion bonus/penalty as percentage of volume score (not fixed values)
-  // This ensures tiny volumes can't rank high just from completion bonuses
+  
+  
   let completionMultiplier = 0;
   if (completionRate >= 0.8) {
-    completionMultiplier = 0.5; // +50% bonus for 80%+ completion
+    completionMultiplier = 0.5; 
   } else if (completionRate >= 0.6) {
-    completionMultiplier = 0.25; // +25% bonus for 60%+ completion
+    completionMultiplier = 0.25; 
   } else if (completionRate >= 0.4) {
-    completionMultiplier = 0; // neutral
+    completionMultiplier = 0; 
   } else if (completionRate >= 0.2) {
-    completionMultiplier = -0.3; // -30% penalty for 20-40% completion
+    completionMultiplier = -0.3; 
   } else {
-    completionMultiplier = -0.5; // -50% penalty for <20% completion
+    completionMultiplier = -0.5; 
   }
 
   const completionAdjustment = volumeScore * completionMultiplier;
@@ -121,7 +121,7 @@ function calculateScore(userData, ethPrice) {
     (commitmentScore * 0.1) +
     completionAdjustment;
 
-  // Ensure score is never negative - minimum score is 0
+  
   const finalScore = Math.max(0, totalScore);
 
   return {
