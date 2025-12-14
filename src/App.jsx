@@ -117,7 +117,8 @@ export default function App() {
   const [approvalGranted, setApprovalGranted] = useState(false);
   const [isExemptedFromFees, setIsExemptedFromFees] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [isConnecting, setIsConnecting] = useState(false); 
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [roiData, setRoiData] = useState({}); 
 
   const provider = window.ethereum ? new ethers.BrowserProvider(window.ethereum) : null;
   const contract = provider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider) : null;
@@ -453,6 +454,12 @@ export default function App() {
     }
   }, [dcaSessions.length]);
 
+  useEffect(() => {
+    if (walletAddress && dcaSessions.length > 0) {
+      fetchROI(walletAddress, dcaSessions);
+    }
+  }, [walletAddress, dcaSessions]);
+
   const checkFeeExemptionStatus = async () => {
     if (!walletAddress) return;
 
@@ -553,6 +560,33 @@ export default function App() {
       setActivePurchases([]);
     }
     setFetchingPurchases(false);
+  };
+
+  const fetchROI = async (address, sessions) => {
+    if (!address || !sessions || sessions.length === 0) return;
+
+    const newRoiData = {};
+
+    for (const session of sessions) {
+      try {
+        const res = await fetch(
+          `/api/get-purchase-history?address=${address}&roi=true&sourceToken=${session.sourceToken}&destinationToken=${session.destinationToken}`
+        );
+
+        if (!res.ok) {
+          console.error(`Failed to fetch ROI for ${session.destinationToken}`);
+          continue;
+        }
+
+        const data = await res.json();
+        const key = `${session.sourceToken}-${session.destinationToken}`;
+        newRoiData[key] = data;
+      } catch (err) {
+        console.error(`Error fetching ROI:`, err);
+      }
+    }
+
+    setRoiData(newRoiData);
   };
 
   const connectWallet = async () => {
@@ -984,10 +1018,8 @@ export default function App() {
         )
       ) : (
         <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 transition-colors duration-200">
-      {}
       <div className="max-w-6xl mx-auto mb-6">
         <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md border border-gray-200 dark:border-gray-700">
-          {}
           <button
             onClick={disconnectWallet}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
@@ -997,9 +1029,7 @@ export default function App() {
             <span className="text-xl font-bold text-gray-900 dark:text-white">DCA on <span className="text-purple-600 dark:text-purple-400">Ink</span></span>
           </button>
 
-          {}
           <div className="flex items-center gap-4">
-            {}
             <div className="flex items-center gap-3">
               <a
                 href="https://t.me/+qzZO0ePqZts3YmQ0"
@@ -1048,7 +1078,6 @@ export default function App() {
         </div>
       </div>
 
-      {}
       <div className="max-w-6xl mx-auto mb-6">
         <div className="flex flex-col sm:flex-row gap-4 justify-center bg-gradient-to-r from-purple-50 to-pink-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl p-4 shadow-lg border border-purple-100 dark:border-gray-600">
           <button
@@ -1157,12 +1186,9 @@ export default function App() {
         </div>
       </div>
 
-      {}
       <div className="max-w-6xl mx-auto">
-        {}
         {activeTab === "hallOfFame" && <HallOfFamePage />}
 
-        {}
         {activeTab === "register" && (
           <>
             {!selectedTokenPair ? (
@@ -1186,12 +1212,10 @@ export default function App() {
           </>
         )}
 
-        {}
         {activeTab === "activeSession" && (
           <div className="max-w-6xl mx-auto px-4">
             {dcaSessions.length > 0 ? (
               <div className="space-y-6">
-                {}
                 <div className="flex items-center justify-between mb-8">
                   <div>
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Active Strategies</h2>
@@ -1203,7 +1227,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {dcaSessions.map((session) => {
 
@@ -1237,7 +1260,6 @@ export default function App() {
                         key={session.destinationToken}
                         className="bg-gradient-to-br from-white to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-3xl border-2 border-purple-200 dark:border-gray-600 p-6 shadow-xl dark:shadow-gray-900/50 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]"
                       >
-                        {}
                         <div className="flex items-center gap-4 mb-6 pb-6 border-b border-purple-200 dark:border-gray-600">
                           <div className="flex items-center -space-x-3">
                             {sourceTokenLogo ? (
@@ -1282,9 +1304,94 @@ export default function App() {
                           </div>
                         </div>
 
-                        {}
+                        {(() => {
+                          const roiKey = `${session.sourceToken}-${session.destinationToken}`;
+                          const roi = roiData[roiKey];
+                          const hasROI = roi && roi.purchaseCount > 0;
+                          const roiValue = hasROI ? roi.roi : 0;
+                          const isPositive = roiValue > 0;
+                          const isNegative = roiValue < 0;
+
+                          return (
+                            <div className={`mb-6 rounded-2xl p-6 shadow-2xl border-4 ${
+                              !hasROI ? 'bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600 border-gray-300' :
+                              isPositive ? 'bg-gradient-to-br from-green-400 via-green-500 to-emerald-600 border-green-300' :
+                              isNegative ? 'bg-gradient-to-br from-red-400 via-red-500 to-rose-600 border-red-300' :
+                              'bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600 border-gray-300'
+                            } text-white ${hasROI ? 'animate-pulse' : ''}`}>
+                              <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-12 h-12 bg-white/30 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={
+                                        !hasROI ? "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" :
+                                        isPositive ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" :
+                                        isNegative ? "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" :
+                                        "M4 12h16"
+                                      } />
+                                    </svg>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold opacity-90 uppercase tracking-wide">
+                                      {hasROI ? 'Real-time Performance' : 'Waiting for First Purchase'}
+                                    </p>
+                                    <p className="text-xs opacity-75">
+                                      {hasROI ? `Based on ${roi.purchaseCount} purchase${roi.purchaseCount > 1 ? 's' : ''}` : 'ROI will appear after first buy'}
+                                    </p>
+                                  </div>
+                                </div>
+                                {hasROI && (
+                                  <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg">
+                                    <p className="text-xs font-semibold uppercase tracking-wider">
+                                      {isPositive ? '🚀 Winning' : isNegative ? '📉 Losing' : '➡️ Even'}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border-2 border-white/20">
+                                {hasROI ? (
+                                  <>
+                                    <div className="flex items-end justify-between mb-3">
+                                      <div>
+                                        <p className="text-sm opacity-90 mb-1 font-semibold">Return on Investment</p>
+                                        <div className="flex items-baseline gap-3">
+                                          <p className="text-6xl font-black tracking-tight">
+                                            {isPositive ? '+' : ''}{roiValue.toFixed(2)}%
+                                          </p>
+                                          <div className="flex flex-col">
+                                            <span className="text-lg font-bold uppercase">
+                                              {isPositive ? 'Profit' : isNegative ? 'Loss' : 'Break-even'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t-2 border-white/20">
+                                      <div>
+                                        <p className="text-xs opacity-75 mb-1">Total Spent</p>
+                                        <p className="text-lg font-bold">{formatNumber(roi.totalSpent)} {sourceTokenName}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs opacity-75 mb-1">Current Value</p>
+                                        <p className="text-lg font-bold">{formatNumber(roi.currentValue)} {sourceTokenName}</p>
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="text-center py-8">
+                                    <div className="text-5xl font-black mb-3">--</div>
+                                    <p className="text-sm opacity-90">Your next scheduled purchase will execute soon</p>
+                                    <p className="text-xs opacity-75 mt-2">ROI tracking begins after first execution</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         <div className="grid grid-cols-2 gap-4 mb-6">
-                          {}
                           <div className="bg-white dark:bg-gray-700 rounded-xl p-4 border border-purple-100 dark:border-gray-600">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -1298,7 +1405,6 @@ export default function App() {
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{sourceTokenName}</p>
                           </div>
 
-                          {}
                           <div className="bg-white dark:bg-gray-700 rounded-xl p-4 border border-purple-100 dark:border-gray-600">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
@@ -1312,7 +1418,6 @@ export default function App() {
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">remaining</p>
                           </div>
 
-                          {}
                           <div className="col-span-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-4 text-white">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -1327,7 +1432,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {}
                         <div className="bg-white dark:bg-gray-700 rounded-xl p-4 border border-purple-100 dark:border-gray-600 mb-6">
                           <div className="flex items-center justify-between mb-3">
                             <div>
@@ -1346,7 +1450,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {}
                         <button
                           onClick={() => stopDCA(session.destinationToken)}
                           disabled={stopping && stoppingToken === session.destinationToken}
@@ -1392,7 +1495,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         {activeTab === "history" && (
           <div className="max-w-6xl mx-auto px-4">
             {fetchingPurchases ? (

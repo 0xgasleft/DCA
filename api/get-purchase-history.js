@@ -4,7 +4,9 @@ import { getCachedEvents } from "../lib/cache.js";
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const RPC_URL = process.env.RPC_URL;
 const RECENT_BLOCKS_WINDOW = 50000;
-const CHUNK_SIZE = 10000; 
+const CHUNK_SIZE = 10000;
+const RELAY_API_URL = "https://api.relay.link/quote";
+const INK_CHAIN_ID = 57073;
 const CONTRACT_ABI = [
   "event PurchaseExecuted(address indexed buyer, address indexed sourceToken, address indexed destinationToken, uint256 amountIn, uint256 amountOut, uint256 daysLeft)"
 ];
@@ -122,6 +124,72 @@ async function fetchUserPurchaseEvents(contract, userAddress, provider) {
   return uniqueEvents;
 }
 
+async function getCurrentPrice(sourceToken, destinationToken, amountOut) {
+  try {
+    const response = await fetch(RELAY_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "DCA-on-Ink/1.0"
+      },
+      body: JSON.stringify({
+        user: CONTRACT_ADDRESS,
+        originChainId: INK_CHAIN_ID,
+        destinationChainId: INK_CHAIN_ID,
+        originCurrency: destinationToken,
+        destinationCurrency: sourceToken,
+        amount: amountOut.toString(),
+        tradeType: "EXACT_INPUT",
+        recipient: CONTRACT_ADDRESS
+      })
+    });
+
+    if (!response.ok) {
+      console.error(`[ROI] Price fetch failed: ${response.status}`);
+      return null;
+    }
+
+    const quote = await response.json();
+    const amountIn = BigInt(quote.details?.currencyOut?.amount || "0");
+
+    if (amountIn === 0n) {
+      return null;
+    }
+
+    return amountIn;
+  } catch (error) {
+    console.error("[ROI] Error fetching current price:", error.message);
+    return null;
+  }
+}
+
+function calculateROI(userEvents, sourceToken, destinationToken, sourceInfo, destInfo) {
+  const normalizedSource = sourceToken.toLowerCase();
+  const normalizedDest = destinationToken.toLowerCase();
+
+  const relevantEvents = userEvents.filter(event =>
+    event.sourceToken === normalizedSource &&
+    event.destinationToken === normalizedDest
+  );
+
+  if (relevantEvents.length === 0) {
+    return null;
+  }
+
+  let totalSpentWei = BigInt(0);
+  let totalReceivedWei = BigInt(0);
+
+  relevantEvents.forEach(event => {
+    totalSpentWei += BigInt(event.amountIn);
+    totalReceivedWei += BigInt(event.amountOut);
+  });
+
+  return {
+    totalSpentWei,
+    totalReceivedWei,
+    purchaseCount: relevantEvents.length
+  };
+}
 
 export default async function handler(req, res) {
   try {
@@ -129,7 +197,7 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "Method Not Allowed" });
     }
 
-    const { address } = req.query;
+    const { address, roi, sourceToken, destinationToken } = req.query;
 
     if (!address) {
       return res.status(400).json({ error: "Address parameter required" });
@@ -139,6 +207,48 @@ export default async function handler(req, res) {
     const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
     const userEvents = await fetchUserPurchaseEvents(contract, address, provider);
+
+    if (roi === 'true' && sourceToken && destinationToken) {
+      const sourceInfo = await getTokenInfo(sourceToken, provider);
+      const destInfo = await getTokenInfo(destinationToken, provider);
+
+      const roiData = calculateROI(userEvents, sourceToken, destinationToken, sourceInfo, destInfo);
+
+      if (!roiData) {
+        return res.status(200).json({
+          roi: 0,
+          totalSpent: "0",
+          totalReceived: "0",
+          currentValue: "0",
+          purchaseCount: 0
+        });
+      }
+
+      const currentValueWei = await getCurrentPrice(
+        sourceToken,
+        destinationToken,
+        roiData.totalReceivedWei
+      );
+
+      let roiPercent = 0;
+      let currentValue = "0";
+
+      if (currentValueWei && currentValueWei > 0n && roiData.totalSpentWei > 0n) {
+        const roiBigInt = ((currentValueWei - roiData.totalSpentWei) * BigInt(10000)) / roiData.totalSpentWei;
+        roiPercent = Number(roiBigInt) / 100;
+        currentValue = ethers.formatUnits(currentValueWei, sourceInfo.decimals);
+      }
+
+      return res.status(200).json({
+        roi: roiPercent,
+        totalSpent: ethers.formatUnits(roiData.totalSpentWei, sourceInfo.decimals),
+        totalReceived: ethers.formatUnits(roiData.totalReceivedWei, destInfo.decimals),
+        currentValue: currentValue,
+        purchaseCount: roiData.purchaseCount,
+        sourceToken: sourceInfo.symbol,
+        destinationToken: destInfo.symbol
+      });
+    }
 
     const uniqueTokens = new Set();
     userEvents.forEach(e => {
