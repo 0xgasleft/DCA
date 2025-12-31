@@ -260,44 +260,54 @@ async function handleROIMetrics(address) {
     await getTokenInfo(tokenAddress, provider);
   }
 
-  // Group purchases by session (normalize addresses to lowercase)
-  const purchasesBySession = new Map();
-  if (purchases) {
-    purchases.forEach(purchase => {
-      const key = `${purchase.source_token.toLowerCase()}-${purchase.destination_token.toLowerCase()}`;
-      if (!purchasesBySession.has(key)) {
-        purchasesBySession.set(key, []);
-      }
-      purchasesBySession.get(key).push(purchase);
-    });
-  }
-
+  // Don't pre-group purchases - we'll match them to sessions individually based on timestamp
   console.log('[ROI] Total purchases fetched:', purchases?.length || 0);
-  console.log('[ROI] Unique session keys in purchases:', Array.from(purchasesBySession.keys()));
 
   // Calculate ROI for each session
   const enrichedSessions = sessions.map(session => {
     const sessionKey = `${session.source_token.toLowerCase()}-${session.destination_token.toLowerCase()}`;
-    const sessionPurchases = purchasesBySession.get(sessionKey) || [];
 
     // Get token decimals from cache
     const sourceTokenInfo = tokenInfoCache.get(session.source_token.toLowerCase()) || { decimals: 18, symbol: 'UNKNOWN' };
     const destTokenInfo = tokenInfoCache.get(session.destination_token.toLowerCase()) || { decimals: 18, symbol: 'UNKNOWN' };
 
-    console.log(`[ROI] Session ${sessionKey}:`, {
+    // Match purchases to THIS specific session based on:
+    // 1. Token pair match
+    // 2. Purchase timestamp >= session registration timestamp
+    // 3. Purchase timestamp < next session registration timestamp (if exists)
+    const sessionRegistrationTime = session.registration_timestamp;
+
+    // Find the next session with the same token pair (if any)
+    const nextSession = sessions.find(s =>
+      s.source_token.toLowerCase() === session.source_token.toLowerCase() &&
+      s.destination_token.toLowerCase() === session.destination_token.toLowerCase() &&
+      s.registration_timestamp > sessionRegistrationTime
+    );
+    const nextSessionTime = nextSession ? nextSession.registration_timestamp : Infinity;
+
+    // Filter purchases that belong to THIS session only
+    const sessionPurchases = purchases?.filter(p =>
+      p.source_token.toLowerCase() === session.source_token.toLowerCase() &&
+      p.destination_token.toLowerCase() === session.destination_token.toLowerCase() &&
+      p.timestamp &&
+      p.timestamp >= sessionRegistrationTime &&
+      p.timestamp < nextSessionTime
+    ) || [];
+
+    console.log(`[ROI] Session ${sessionKey} (registered: ${sessionRegistrationTime}):`, {
       totalPurchases: sessionPurchases.length,
-      registrationTimestamp: session.registration_timestamp,
+      registrationTimestamp: sessionRegistrationTime,
+      nextSessionTimestamp: nextSession ? nextSessionTime : 'none',
       hasRegistrationPrice: !!session.registration_expected_amount_out
     });
 
-    // Filter purchases that happened after registration
-    // STRICT: Only use purchases with valid timestamp data
+    // STRICT: Only use purchases with valid timestamp data (already filtered above)
     const relevantPurchases = sessionPurchases.filter(p => {
       if (!p.timestamp) {
         console.warn(`[ROI] Purchase ${p.tx_hash} missing timestamp - excluding from ROI calculation`);
         return false;
       }
-      return p.timestamp >= session.registration_timestamp;
+      return true;
     });
 
     console.log(`[ROI] Session ${sessionKey} relevant purchases:`, relevantPurchases.length);
