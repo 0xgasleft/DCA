@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI, RPC_URL } from '../lib/constants.js';
+import { fetchPriceImpact } from '../lib/priceImpact.js';
 
 function roundToQuarterHour(buy_time) {
   const [h, m] = buy_time.split(":").map(Number);
@@ -88,6 +89,52 @@ export default async function handler(req, res) {
 
         if (statsError) {
           console.error('[STATS] Failed to update registration stats:', statsError.message);
+        }
+
+        // Store initial price data for ROI calculations
+        try {
+          console.log('[ROI] Fetching registration price for ROI tracking...');
+          const priceData = await fetchPriceImpact(
+            CONTRACT_ADDRESS,
+            sourceToken,
+            destinationToken,
+            totalVolume
+          );
+
+          if (priceData && !priceData.error && priceData.expectedOutput) {
+            const exchangeRate = Number(priceData.expectedOutput) / Number(totalVolume);
+
+            const { error: priceError } = await supabase
+              .from('dca_session_prices')
+              .insert({
+                buyer_address: validInput.address.toLowerCase(),
+                source_token: sourceToken.toLowerCase(),
+                destination_token: destinationToken.toLowerCase(),
+                registration_tx_hash: validInput.tx_hash.toLowerCase(),
+                registration_timestamp: Math.floor(Date.now() / 1000),
+                registration_block_number: receipt.blockNumber,
+                registration_amount_in: totalVolume,
+                registration_expected_amount_out: priceData.expectedOutput.toString(),
+                registration_exchange_rate: exchangeRate,
+                amount_per_day: amountPerDay.toString(),
+                total_days: Number(daysLeft),
+                registration_request_id: priceData.requestId || null,
+                registration_quote_json: priceData.quote || null,
+                session_status: 'active'
+              });
+
+            if (priceError) {
+              console.error('[ROI] Failed to store registration price:', priceError.message);
+            } else {
+              console.log('[ROI] Registration price stored successfully for future ROI calculations');
+              console.log(`[ROI] Exchange rate: ${exchangeRate} ${destinationToken}/${sourceToken}`);
+            }
+          } else {
+            console.warn('[ROI] Could not fetch registration price, ROI will not be available for this session');
+          }
+        } catch (roiErr) {
+          console.error('[ROI] Error tracking registration price:', roiErr.message);
+          // Don't fail the whole request if ROI tracking fails
         }
       } else {
         console.error('[STATS] No RegisteredDCASession event found in block', receipt.blockNumber);

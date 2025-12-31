@@ -62,6 +62,29 @@ async function doDCA(contract, session) {
 
   if (result.success && result.priceImpact !== null && result.priceImpact !== undefined) {
     try {
+      // Calculate exchange rate for ROI tracking
+      const exchangeRate = Number(result.amountOut) > 0 && Number(amount_per_day) > 0
+        ? Number(result.amountOut) / Number(amount_per_day)
+        : null;
+
+      // Get block timestamp and number for the transaction
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const receipt = await provider.getTransactionReceipt(result.txHash);
+      let blockTimestamp = Math.floor(Date.now() / 1000);
+      let blockNumber = null;
+
+      if (receipt && receipt.blockNumber) {
+        blockNumber = receipt.blockNumber;
+        try {
+          const block = await provider.getBlock(receipt.blockNumber);
+          if (block) {
+            blockTimestamp = block.timestamp;
+          }
+        } catch (blockErr) {
+          console.warn('Could not fetch block timestamp:', blockErr.message);
+        }
+      }
+
       const { error: impactError } = await supabase
         .from('price_impact_cache')
         .upsert({
@@ -73,6 +96,9 @@ async function doDCA(contract, session) {
           slippage_percent: result.slippagePercent,
           amount_in: amount_per_day.toString(),
           amount_out: result.amountOut.toString(),
+          exchange_rate: exchangeRate,
+          block_number: blockNumber,
+          timestamp: blockTimestamp,
           created_at: new Date().toISOString()
         }, {
           onConflict: 'tx_hash'
@@ -82,6 +108,9 @@ async function doDCA(contract, session) {
         console.error('Failed to store price impact:', impactError.message);
       } else {
         console.log(`Price impact stored: ${result.priceImpact.toFixed(4)}%`);
+        if (exchangeRate) {
+          console.log(`Exchange rate: ${exchangeRate}`);
+        }
         if (result.slippagePercent !== null) {
           console.log(`Slippage tolerance: ${result.slippagePercent}%`);
         }

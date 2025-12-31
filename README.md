@@ -314,8 +314,10 @@ Executes pending DCA purchases for all active users (called by Upstash QStash).
 ### `/api/get-dca-stats` (GET)
 Fetches aggregated statistics for a token pair.
 
-### `/api/get-purchase-history` (GET)
-Retrieves purchase history for a user.
+### `/api/get-user-data` (GET)
+Retrieves user-specific data. Supports two types via query parameter:
+- `?type=purchase-history` - Returns purchase history for a user
+- `?type=roi-metrics` - Returns ROI performance metrics for a user
 
 ---
 
