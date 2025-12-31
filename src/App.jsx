@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { ethers } from "ethers";
 import { toast, Toaster } from 'sonner';
 import { inject } from "@vercel/analytics";
@@ -10,9 +10,12 @@ import LandingPage from "./pages/LandingPage.jsx";
 import ConnectWalletPage from "./pages/ConnectWalletPage.jsx";
 import TokenSelectionPage from "./pages/TokenSelectionPage.jsx";
 import DCAConfigPage from "./pages/DCAConfigPage.jsx";
-import VisualizerPage from "./pages/VisualizerPage.jsx";
-import HallOfFamePage from "./pages/HallOfFamePage.jsx";
 import ThemeToggle from "./components/ThemeToggle.jsx";
+
+// Lazy load heavy components to reduce initial bundle size
+const VisualizerPage = lazy(() => import("./pages/VisualizerPage.jsx"));
+const HallOfFamePage = lazy(() => import("./pages/HallOfFamePage.jsx"));
+const PortfolioPerformancePage = lazy(() => import("./pages/PortfolioPerformancePage.jsx"));
 
 
 import { CONTRACT_ABI, ERC20_ABI, CONTRACT_ADDRESS } from "../lib/constants.js";
@@ -540,7 +543,7 @@ export default function App() {
     setFetchingPurchases(true);
     try {
 
-      const res = await fetch(`/api/get-purchase-history?address=${address}`);
+      const res = await fetch(`/api/get-user-data?address=${address}&type=purchase-history`);
 
       if (!res.ok) {
         throw new Error(`Failed to fetch purchase history: ${res.statusText}`);
@@ -964,7 +967,9 @@ export default function App() {
       <>
         <Toaster position="top-center" richColors closeButton />
         <SpeedInsights />
-        <VisualizerPage />
+        <Suspense fallback={<div className="flex justify-center items-center min-h-screen"><FaSpinner className="text-6xl text-blue-500 animate-spin" /></div>}>
+          <VisualizerPage />
+        </Suspense>
       </>
     );
   }
@@ -1073,6 +1078,27 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setActiveTab("performance")}
+            className={`group relative px-6 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
+              activeTab === "performance"
+                ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xl shadow-emerald-300 dark:shadow-emerald-900/50"
+                : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-600 hover:border-emerald-300 dark:hover:border-emerald-500 shadow-md hover:shadow-xl border border-emerald-200 dark:border-gray-600"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0">
+                <svg className={`w-6 h-6 transition-colors ${activeTab === "performance" ? "text-white" : "text-emerald-600 group-hover:text-emerald-700"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <div className="text-base font-bold leading-tight">Performance</div>
+                <div className={`text-xs leading-tight mt-0.5 ${activeTab === "performance" ? "text-emerald-100" : "text-gray-500 group-hover:text-emerald-600"}`}>Track your ROI</div>
+              </div>
+            </div>
+          </button>
+
+          <button
             onClick={() => setActiveTab("register")}
             className={`group relative px-6 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
               activeTab === "register"
@@ -1160,7 +1186,18 @@ export default function App() {
       {}
       <div className="max-w-6xl mx-auto">
         {}
-        {activeTab === "hallOfFame" && <HallOfFamePage />}
+        {activeTab === "hallOfFame" && (
+          <Suspense fallback={<div className="flex justify-center items-center py-20"><FaSpinner className="text-4xl text-blue-500 animate-spin" /></div>}>
+            <HallOfFamePage />
+          </Suspense>
+        )}
+
+        {}
+        {activeTab === "performance" && (
+          <Suspense fallback={<div className="flex justify-center items-center py-20"><FaSpinner className="text-4xl text-blue-500 animate-spin" /></div>}>
+            <PortfolioPerformancePage walletAddress={walletAddress} />
+          </Suspense>
+        )}
 
         {}
         {activeTab === "register" && (
