@@ -1,19 +1,16 @@
 import { supabase } from '../lib/supabase.js';
-import { ethers } from 'ethers';
-import { CONTRACT_ADDRESS, CONTRACT_ABI, RPC_URL } from '../lib/constants.js';
 import { fetchPriceImpact } from '../lib/priceImpact.js';
+import { CONTRACT_ADDRESS } from '../lib/constants.js';
 
 function roundToQuarterHour(buy_time) {
   const [h, m] = buy_time.split(":").map(Number);
   const rounded = Math.round(m / 15) * 15;
   const finalMin = rounded === 60 ? 0 : rounded;
   const finalHour = (rounded === 60 ? h + 1 : h) % 24;
-
   return `${String(finalHour).padStart(2, "0")}:${String(finalMin).padStart(2, "0")}`;
 }
 
-
-function validateDCAInput({ address, buy_time, source_token, destination_token, tx_hash }) {
+function validateDCAInput({ address, buy_time, source_token, destination_token, tx_hash, amount_per_day, days_left, block_number }) {
   if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
     throw new Error("Invalid address");
   }
@@ -39,12 +36,27 @@ function validateDCAInput({ address, buy_time, source_token, destination_token, 
     throw new Error("Invalid tx_hash");
   }
 
+  if (!amount_per_day || !/^\d+$/.test(amount_per_day)) {
+    throw new Error("Invalid amount_per_day");
+  }
+
+  if (!days_left || !/^\d+$/.test(days_left)) {
+    throw new Error("Invalid days_left");
+  }
+
+  if (!block_number || !/^\d+$/.test(block_number)) {
+    throw new Error("Invalid block_number");
+  }
+
   return {
     address,
     buy_time: roundToQuarterHour(buy_time),
     source_token,
     destination_token,
-    tx_hash
+    tx_hash,
+    amount_per_day,
+    days_left,
+    block_number
   };
 }
 
@@ -57,87 +69,62 @@ export default async function handler(req, res) {
     const validInput = validateDCAInput(req.body);
 
     try {
-      const provider = new ethers.JsonRpcProvider(RPC_URL);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      const amountPerDay = BigInt(validInput.amount_per_day);
+      const daysLeft = BigInt(validInput.days_left);
+      const totalVolume = (amountPerDay * daysLeft).toString();
 
-      const receipt = await provider.getTransactionReceipt(validInput.tx_hash);
+      const { error: statsError } = await supabase.rpc('increment_registration_stats', {
+        p_source_token: validInput.source_token.toLowerCase(),
+        p_destination_token: validInput.destination_token.toLowerCase(),
+        p_volume_registered: totalVolume
+      });
 
-      if (!receipt) {
-        console.error('[STATS] Transaction receipt not found for', validInput.tx_hash);
-        return res.status(200).json({ success: true });
+      if (statsError) {
+        console.error('[STATS] Failed to update registration stats:', statsError.message);
       }
 
-      const filter = contract.filters.RegisteredDCASession(validInput.address);
-      const events = await contract.queryFilter(filter, receipt.blockNumber, receipt.blockNumber);
+      try {
+        console.log('[ROI] Fetching registration price for ROI tracking...');
+        const priceData = await fetchPriceImpact(
+          CONTRACT_ADDRESS,
+          validInput.source_token,
+          validInput.destination_token,
+          totalVolume
+        );
 
-      if (events.length > 0) {
-        const event = events.find(e => e.transactionHash === validInput.tx_hash);
+        if (priceData && !priceData.error && priceData.expectedOutput) {
+          const exchangeRate = Number(priceData.expectedOutput) / Number(totalVolume);
 
-        if (!event) {
-          console.error('[STATS] Event not found in transaction', validInput.tx_hash);
-          return res.status(200).json({ success: true });
-        }
+          const { error: priceError } = await supabase
+            .from('dca_session_prices')
+            .insert({
+              buyer_address: validInput.address.toLowerCase(),
+              source_token: validInput.source_token.toLowerCase(),
+              destination_token: validInput.destination_token.toLowerCase(),
+              registration_tx_hash: validInput.tx_hash.toLowerCase(),
+              registration_timestamp: Math.floor(Date.now() / 1000),
+              registration_block_number: Number(validInput.block_number),
+              registration_amount_in: totalVolume,
+              registration_expected_amount_out: priceData.expectedOutput.toString(),
+              registration_exchange_rate: exchangeRate,
+              amount_per_day: amountPerDay.toString(),
+              total_days: Number(daysLeft),
+              registration_request_id: priceData.requestId || null,
+              registration_quote_json: priceData.quote || null,
+              session_status: 'active'
+            });
 
-        const { amountPerDay, daysLeft, sourceToken, destinationToken } = event.args;
-        const totalVolume = (BigInt(amountPerDay) * BigInt(daysLeft)).toString();
-
-        const { error: statsError } = await supabase.rpc('increment_registration_stats', {
-          p_source_token: sourceToken.toLowerCase(),
-          p_destination_token: destinationToken.toLowerCase(),
-          p_volume_registered: totalVolume
-        });
-
-        if (statsError) {
-          console.error('[STATS] Failed to update registration stats:', statsError.message);
-        }
-
-        // Store initial price data for ROI calculations
-        try {
-          console.log('[ROI] Fetching registration price for ROI tracking...');
-          const priceData = await fetchPriceImpact(
-            CONTRACT_ADDRESS,
-            sourceToken,
-            destinationToken,
-            totalVolume
-          );
-
-          if (priceData && !priceData.error && priceData.expectedOutput) {
-            const exchangeRate = Number(priceData.expectedOutput) / Number(totalVolume);
-
-            const { error: priceError } = await supabase
-              .from('dca_session_prices')
-              .insert({
-                buyer_address: validInput.address.toLowerCase(),
-                source_token: sourceToken.toLowerCase(),
-                destination_token: destinationToken.toLowerCase(),
-                registration_tx_hash: validInput.tx_hash.toLowerCase(),
-                registration_timestamp: Math.floor(Date.now() / 1000),
-                registration_block_number: receipt.blockNumber,
-                registration_amount_in: totalVolume,
-                registration_expected_amount_out: priceData.expectedOutput.toString(),
-                registration_exchange_rate: exchangeRate,
-                amount_per_day: amountPerDay.toString(),
-                total_days: Number(daysLeft),
-                registration_request_id: priceData.requestId || null,
-                registration_quote_json: priceData.quote || null,
-                session_status: 'active'
-              });
-
-            if (priceError) {
-              console.error('[ROI] Failed to store registration price:', priceError.message);
-            } else {
-              console.log('[ROI] Registration price stored successfully for future ROI calculations');
-              console.log(`[ROI] Exchange rate: ${exchangeRate} ${destinationToken}/${sourceToken}`);
-            }
+          if (priceError) {
+            console.error('[ROI] Failed to store registration price:', priceError.message);
           } else {
-            console.warn('[ROI] Could not fetch registration price, ROI will not be available for this session');
+            console.log('[ROI] Registration price stored successfully for future ROI calculations');
+            console.log(`[ROI] Exchange rate: ${exchangeRate} ${validInput.destination_token}/${validInput.source_token}`);
           }
-        } catch (roiErr) {
-          console.error('[ROI] Error tracking registration price:', roiErr.message);
-          // Don't fail the whole request if ROI tracking fails
+        } else {
+          console.warn('[ROI] Could not fetch registration price, ROI will not be available for this session');
         }
-      } else {
-        console.error('[STATS] No RegisteredDCASession event found in block', receipt.blockNumber);
+      } catch (roiErr) {
+        console.error('[ROI] Error tracking registration price:', roiErr.message);
       }
     } catch (statsErr) {
       console.error('[STATS] Error:', statsErr.message);
@@ -148,4 +135,3 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: err.message || "Invalid request" });
   }
 }
-
