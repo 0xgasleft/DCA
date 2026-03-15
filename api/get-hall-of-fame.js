@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import { createClient } from "@supabase/supabase-js";
+import { rateLimit, getClientIp } from "../lib/rateLimit.js";
 
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const RPC_URL = process.env.RPC_VISUALIZE_URL;
@@ -163,6 +164,12 @@ export default async function handler(req, res) {
 
   if (req.method !== "POST" && req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const { allowed, remaining, resetIn } = rateLimit(getClientIp(req), 10, 60_000);
+  res.setHeader('X-RateLimit-Remaining', remaining);
+  if (!allowed) {
+    return res.status(429).json({ error: 'Too many requests', retryAfter: Math.ceil(resetIn / 1000) });
   }
 
   try {

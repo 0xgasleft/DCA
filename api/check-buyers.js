@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import { CONTRACT_ABI, CONTRACT_ADDRESS } from "../lib/constants.js";
 import { signer } from "../lib/provider.js";
-import launchDCA from "./run-dca.js";
+import launchDCA from "../lib/run-dca.js";
 
 const EXPECTED_SCHEDULE_ID = process.env.UPSTASH_CHECK_BUYERS_ID;
 

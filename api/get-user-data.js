@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { ethers } from "ethers";
 import { getCachedEvents } from "../lib/cache.js";
+import { rateLimit, getClientIp } from "../lib/rateLimit.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -593,6 +594,12 @@ export default async function handler(req, res) {
 
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const { allowed, remaining, resetIn } = rateLimit(getClientIp(req), 20, 60_000);
+  res.setHeader('X-RateLimit-Remaining', remaining);
+  if (!allowed) {
+    return res.status(429).json({ error: 'Too many requests', retryAfter: Math.ceil(resetIn / 1000) });
   }
 
   try {

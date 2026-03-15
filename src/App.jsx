@@ -824,7 +824,10 @@ export default function App() {
         buy_time: time,
         source_token: source.address,
         destination_token: destination.address,
-        tx_hash: receipt.hash
+        tx_hash: receipt.hash,
+        amount_per_day: amountWei.toString(),
+        days_left: daysNum.toString(),
+        block_number: receipt.blockNumber.toString()
       };
 
       const res = await fetch("/api/register-dca", {
