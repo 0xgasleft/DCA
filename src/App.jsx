@@ -437,6 +437,12 @@ export default function App() {
   }, [walletConnected]);
 
   useEffect(() => {
+    if (!walletConnected || dcaSessions.length === 0) return;
+    const interval = setInterval(fetchDcaInfo, 60_000);
+    return () => clearInterval(interval);
+  }, [walletConnected, dcaSessions.length]);
+
+  useEffect(() => {
     if (walletConnected && walletAddress) {
       checkFeeExemptionStatus();
     }
