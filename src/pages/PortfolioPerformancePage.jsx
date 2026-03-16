@@ -18,7 +18,7 @@ const PortfolioPerformancePage = ({ walletAddress }) => {
     setError(null);
 
     try {
-      const response = await fetch(`/api/get-user-data?address=${walletAddress}&type=roi-metrics`);
+      const response = await fetch(`/api/portfolio?address=${walletAddress}&type=roi-metrics`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch ROI metrics');

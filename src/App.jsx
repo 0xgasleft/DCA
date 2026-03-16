@@ -543,7 +543,7 @@ export default function App() {
     setFetchingPurchases(true);
     try {
 
-      const res = await fetch(`/api/get-user-data?address=${address}&type=purchase-history`);
+      const res = await fetch(`/api/portfolio?address=${address}&type=purchase-history`);
 
       if (!res.ok) {
         throw new Error(`Failed to fetch purchase history: ${res.statusText}`);
