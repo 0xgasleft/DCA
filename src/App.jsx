@@ -306,7 +306,7 @@ export default function App() {
         console.error("Error loading token fee:", err);
 
         const isETH = selectedTokenPair.source.isNative;
-        setMinFee(isETH ? 0.00005 : 0.2);
+        setMinFee(isETH ? 0.0002 : 0.5);
       }
     };
 
@@ -795,7 +795,7 @@ export default function App() {
         
         if (!isExemptedFromFees) {
           const zeroPointOnePercent = dcaTotal / BigInt(1000);
-          const minFeeWei = ethers.parseEther(minFee != null ? minFee.toFixed(18) : "0.00005");
+          const minFeeWei = ethers.parseEther(minFee != null ? minFee.toFixed(18) : "0.0002");
           const fee = zeroPointOnePercent > minFeeWei ? zeroPointOnePercent : minFeeWei;
           total = dcaTotal + fee;
           console.log(`Registering with fee: ${ethers.formatEther(fee)} ETH`);

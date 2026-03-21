@@ -30,7 +30,7 @@ export default function DCAConfigPage({
 
   const totalAmount = parseFloat(amountPerDay || 0) * parseInt(daysLeft || 0);
   const fee = totalAmount * 0.001;
-  const finalFee = Math.max(fee, minFee || 0.00005);
+  const finalFee = Math.max(fee, minFee || 0.0002);
   const calculatedFee = `${formatNumber(finalFee)} ${selectedPair.source.symbol}`;
 
   
