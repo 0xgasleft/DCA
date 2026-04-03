@@ -596,10 +596,22 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { allowed, remaining, resetIn } = await rateLimit(getClientIp(req), 10, 60_000);
+  const clientIp = getClientIp(req);
+  const { allowed, remaining, resetIn } = await rateLimit(clientIp, 10, 60_000);
   res.setHeader('X-RateLimit-Remaining', remaining);
   if (!allowed) {
     return res.status(429).json({ error: 'Too many requests', retryAfter: Math.ceil(resetIn / 1000) });
+  }
+
+  // Secondary limit: max 20 distinct addresses queried per IP per 10 minutes
+  // This stops scrapers that rotate wallet addresses to bypass the per-request limit
+  const { address: rawAddress } = req.query;
+  if (rawAddress) {
+    const addrKey = `addr:${clientIp}:${rawAddress.toLowerCase()}`;
+    const { allowed: addrAllowed } = await rateLimit(addrKey, 20, 600_000);
+    if (!addrAllowed) {
+      return res.status(429).json({ error: 'Too many requests', retryAfter: 600 });
+    }
   }
 
   try {
