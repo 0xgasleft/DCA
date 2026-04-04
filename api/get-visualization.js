@@ -63,6 +63,15 @@ async function getBlockTimestamp(blockNumber, provider) {
   return timestamp;
 }
 
+async function batchedPromiseAll(items, fn, concurrency = 30) {
+  const results = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    results.push(...await Promise.all(batch.map(fn)));
+  }
+  return results;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -154,24 +163,26 @@ export default async function handler(req, res) {
       buyerDestTokensMap.get(buyerLower).add(destToken);
     }
 
-    // Fetch all getDCAConfig calls in parallel
-    await Promise.all(registeredBuyers.map(async (buyer) => {
-      uniqueActiveWallets.add(buyer.toLowerCase());
+    // Fetch all getDCAConfig calls in parallel (batched to avoid RPC overload)
+    registeredBuyers.forEach(b => uniqueActiveWallets.add(b.toLowerCase()));
+
+    const allConfigCalls = registeredBuyers.flatMap(buyer => {
       const buyerLower = buyer.toLowerCase();
       const destTokens = buyerDestTokensMap.get(buyerLower) || new Set();
+      return Array.from(destTokens).map(destToken => ({ buyer, buyerLower, destToken }));
+    });
 
-      await Promise.all(Array.from(destTokens).map(async (destToken) => {
-        try {
-          const config = await contract.getDCAConfig(buyer, destToken);
-          if (Number(config.days_left) > 0) {
-            if (!liveActiveSessions.has(buyerLower)) liveActiveSessions.set(buyerLower, new Set());
-            liveActiveSessions.get(buyerLower).add(destToken);
-          }
-        } catch (err) {
-          console.log(`No active session for ${buyer} -> ${destToken}`);
+    await batchedPromiseAll(allConfigCalls, async ({ buyer, buyerLower, destToken }) => {
+      try {
+        const config = await contract.getDCAConfig(buyer, destToken);
+        if (Number(config.days_left) > 0) {
+          if (!liveActiveSessions.has(buyerLower)) liveActiveSessions.set(buyerLower, new Set());
+          liveActiveSessions.get(buyerLower).add(destToken);
         }
-      }));
-    }));
+      } catch (err) {
+        console.log(`No active session for ${buyer} -> ${destToken}`);
+      }
+    }, 20);
 
     
     let totalActiveSessions = 0;
@@ -201,10 +212,10 @@ export default async function handler(req, res) {
       ...purchaseEvents.map(e => e.args.destinationToken.toLowerCase())
     ])];
 
-    console.log(`Pre-fetching ${uniqueBlockNumbers.length} block timestamps and ${uniqueTokenAddresses.length} token infos in parallel...`);
+    console.log(`Pre-fetching ${uniqueBlockNumbers.length} block timestamps and ${uniqueTokenAddresses.length} token infos in batches...`);
     await Promise.all([
-      ...uniqueBlockNumbers.map(bn => getBlockTimestamp(bn, provider)),
-      ...uniqueTokenAddresses.map(addr => getTokenInfo(addr, provider))
+      batchedPromiseAll(uniqueBlockNumbers, bn => getBlockTimestamp(bn, provider), 30),
+      batchedPromiseAll(uniqueTokenAddresses, addr => getTokenInfo(addr, provider), 10)
     ]);
     console.log("Pre-fetch complete.");
 
