@@ -204,19 +204,15 @@ export default async function handler(req, res) {
     const dailyActivity = new Map();
     const tokenPairs = new Map();
 
-    // Pre-fetch all unique block timestamps and token infos in parallel
-    const allEvents = [...registrationEvents, ...purchaseEvents];
-    const uniqueBlockNumbers = [...new Set(allEvents.map(e => e.blockNumber))];
+    // Timestamps are now stored in cache by sync-visualization — no RPC needed here
+    // Pre-fetch only token infos (just 4 unique tokens)
     const uniqueTokenAddresses = [...new Set([
       ...registrationEvents.flatMap(e => [e.args.sourceToken.toLowerCase(), e.args.destinationToken.toLowerCase()]),
       ...purchaseEvents.map(e => e.args.destinationToken.toLowerCase())
     ])];
 
-    console.log(`Pre-fetching ${uniqueBlockNumbers.length} block timestamps and ${uniqueTokenAddresses.length} token infos in batches...`);
-    await Promise.all([
-      batchedPromiseAll(uniqueBlockNumbers, bn => getBlockTimestamp(bn, provider), 30),
-      batchedPromiseAll(uniqueTokenAddresses, addr => getTokenInfo(addr, provider), 10)
-    ]);
+    console.log(`Pre-fetching ${uniqueTokenAddresses.length} token infos...`);
+    await batchedPromiseAll(uniqueTokenAddresses, addr => getTokenInfo(addr, provider), 10);
     console.log("Pre-fetch complete.");
 
     for (const event of registrationEvents) {
@@ -245,8 +241,8 @@ export default async function handler(req, res) {
       sourceData.totalVolume += totalValue;
       sourceData.registrationCount += 1;
 
-      const timestamp = await getBlockTimestamp(event.blockNumber, provider);
-      const date = new Date(timestamp * 1000).toISOString().split('T')[0];
+      const timestamp = event.blockTimestamp;
+      const date = timestamp ? new Date(timestamp * 1000).toISOString().split('T')[0] : 'unknown';
       if (!dailyActivity.has(date)) {
         dailyActivity.set(date, { registrations: 0, purchases: 0 });
       }
@@ -280,8 +276,8 @@ export default async function handler(req, res) {
       destData.totalVolume += amountOut;
       destData.purchaseCount += 1;
 
-      const timestamp = await getBlockTimestamp(event.blockNumber, provider);
-      const date = new Date(timestamp * 1000).toISOString().split('T')[0];
+      const timestamp = event.blockTimestamp;
+      const date = timestamp ? new Date(timestamp * 1000).toISOString().split('T')[0] : 'unknown';
       if (!dailyActivity.has(date)) {
         dailyActivity.set(date, { registrations: 0, purchases: 0 });
       }

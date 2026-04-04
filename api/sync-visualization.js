@@ -48,9 +48,10 @@ async function fetchEventsInChunks(contract, eventName, fromBlock, toBlock) {
   return allEvents;
 }
 
-function serializeEvent(event) {
+function serializeEvent(event, timestamp) {
   return {
     blockNumber: event.blockNumber,
+    blockTimestamp: timestamp || null,
     transactionHash: event.transactionHash,
     args: {
       buyer: event.args.buyer,
@@ -139,9 +140,21 @@ export default async function handler(req, res) {
     const newDestroys = await fetchEventsInChunks(contract, "DestroyedDCASession", lastSyncedBlock + 1, syncToBlock);
     console.log(`Found ${newDestroys.length} new cancellations`);
 
-    registrationEvents = [...registrationEvents, ...newRegistrations.map(serializeEvent)];
-    purchaseEvents = [...purchaseEvents, ...newPurchases.map(serializeEvent)];
-    destroyEvents = [...destroyEvents, ...newDestroys.map(serializeEvent)];
+    // Fetch timestamps for all new events at sync time so get-visualization never needs to
+    const allNewEvents = [...newRegistrations, ...newPurchases, ...newDestroys];
+    const uniqueNewBlocks = [...new Set(allNewEvents.map(e => e.blockNumber))];
+    const blockTimestamps = new Map();
+    for (let i = 0; i < uniqueNewBlocks.length; i += 10) {
+      const batch = uniqueNewBlocks.slice(i, i + 10);
+      const blocks = await Promise.all(batch.map(bn => provider.getBlock(bn)));
+      blocks.forEach((block, idx) => {
+        if (block) blockTimestamps.set(uniqueNewBlocks[i + idx], block.timestamp);
+      });
+    }
+
+    registrationEvents = [...registrationEvents, ...newRegistrations.map(e => serializeEvent(e, blockTimestamps.get(e.blockNumber)))];
+    purchaseEvents = [...purchaseEvents, ...newPurchases.map(e => serializeEvent(e, blockTimestamps.get(e.blockNumber)))];
+    destroyEvents = [...destroyEvents, ...newDestroys.map(e => serializeEvent(e, blockTimestamps.get(e.blockNumber)))];
 
     console.log("Updating cache...");
     const { error: updateError } = await supabase
