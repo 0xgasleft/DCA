@@ -145,39 +145,33 @@ export default async function handler(req, res) {
     const liveActiveSessions = new Map(); 
     const uniqueActiveWallets = new Set();
 
-    for (const buyer of registeredBuyers) {
+    // Build buyer -> destTokens map from cached registration events (no RPC needed)
+    const buyerDestTokensMap = new Map();
+    for (const regEvent of registrationEvents) {
+      const buyerLower = regEvent.args.buyer.toLowerCase();
+      const destToken = regEvent.args.destinationToken.toLowerCase();
+      if (!buyerDestTokensMap.has(buyerLower)) buyerDestTokensMap.set(buyerLower, new Set());
+      buyerDestTokensMap.get(buyerLower).add(destToken);
+    }
+
+    // Fetch all getDCAConfig calls in parallel
+    await Promise.all(registeredBuyers.map(async (buyer) => {
       uniqueActiveWallets.add(buyer.toLowerCase());
-
-      
-      
       const buyerLower = buyer.toLowerCase();
-      const buyerDestTokens = new Set();
+      const destTokens = buyerDestTokensMap.get(buyerLower) || new Set();
 
-      for (const regEvent of registrationEvents) {
-        if (regEvent.args.buyer.toLowerCase() === buyerLower) {
-          buyerDestTokens.add(regEvent.args.destinationToken.toLowerCase());
-        }
-      }
-
-      
-      for (const destToken of buyerDestTokens) {
+      await Promise.all(Array.from(destTokens).map(async (destToken) => {
         try {
           const config = await contract.getDCAConfig(buyer, destToken);
-          const daysLeft = Number(config.days_left);
-
-          
-          if (daysLeft > 0) {
-            if (!liveActiveSessions.has(buyerLower)) {
-              liveActiveSessions.set(buyerLower, new Set());
-            }
+          if (Number(config.days_left) > 0) {
+            if (!liveActiveSessions.has(buyerLower)) liveActiveSessions.set(buyerLower, new Set());
             liveActiveSessions.get(buyerLower).add(destToken);
           }
         } catch (err) {
-          
           console.log(`No active session for ${buyer} -> ${destToken}`);
         }
-      }
-    }
+      }));
+    }));
 
     
     let totalActiveSessions = 0;
@@ -198,6 +192,21 @@ export default async function handler(req, res) {
     let totalPurchasesExecuted = purchaseEvents.length;
     const dailyActivity = new Map();
     const tokenPairs = new Map();
+
+    // Pre-fetch all unique block timestamps and token infos in parallel
+    const allEvents = [...registrationEvents, ...purchaseEvents];
+    const uniqueBlockNumbers = [...new Set(allEvents.map(e => e.blockNumber))];
+    const uniqueTokenAddresses = [...new Set([
+      ...registrationEvents.flatMap(e => [e.args.sourceToken.toLowerCase(), e.args.destinationToken.toLowerCase()]),
+      ...purchaseEvents.map(e => e.args.destinationToken.toLowerCase())
+    ])];
+
+    console.log(`Pre-fetching ${uniqueBlockNumbers.length} block timestamps and ${uniqueTokenAddresses.length} token infos in parallel...`);
+    await Promise.all([
+      ...uniqueBlockNumbers.map(bn => getBlockTimestamp(bn, provider)),
+      ...uniqueTokenAddresses.map(addr => getTokenInfo(addr, provider))
+    ]);
+    console.log("Pre-fetch complete.");
 
     for (const event of registrationEvents) {
       const buyer = event.args.buyer.toLowerCase();
