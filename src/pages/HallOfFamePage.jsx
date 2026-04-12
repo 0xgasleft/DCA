@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
 
 
-function formatTokenAmount(value, decimals = 18) {
+function formatTokenAmount(value) {
   const num = parseFloat(value);
-  if (num === 0) return "0";
-  if (isNaN(num)) return "0";
-  if (num < 0.0001) return num.toExponential(4);
-  if (num < 1) return num.toFixed(6).replace(/\.?0+$/, '');
-  if (num < 100) return num.toFixed(4).replace(/\.?0+$/, '');
-  if (num < 10000) return num.toFixed(2);
-  return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if (num === 0 || isNaN(num)) return "0";
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2) + 'M';
+  if (num >= 1_000) return num.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  if (num >= 1) return num.toFixed(4).replace(/\.?0+$/, '');
+  if (num >= 0.001) return num.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  const places = Math.ceil(-Math.log10(num)) + 3;
+  return num.toFixed(Math.min(places, 18)).replace(/0+$/, '').replace(/\.$/, '') || '0';
 }
 
 export default function HallOfFamePage() {
@@ -139,13 +139,16 @@ export default function HallOfFamePage() {
               <div className="h-6 w-px bg-white/20"></div>
               <div className="flex flex-col items-center">
                 <span className="text-2xl font-black text-white" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
-                  {hallOfFame.metadata.totalUsers}
+                  Top {hallOfFame.metadata.topShown ?? hallOfFame.rankings.length}
                 </span>
                 <span className="text-xs text-white/70 uppercase tracking-wider font-semibold" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
-                  Ranked
+                  of {hallOfFame.metadata.totalUsers}
                 </span>
               </div>
             </div>
+            <p className="text-xs text-white/50 mt-3" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+              Showing the top 50 DCA strategists by score
+            </p>
           </div>
         </div>
 
@@ -156,7 +159,7 @@ export default function HallOfFamePage() {
       {}
       {hallOfFame.rankings.length >= 3 && (
         <div className="mb-12 max-w-6xl mx-auto px-4">
-          <div className="grid grid-cols-3 gap-6 items-end">
+          <div className="hidden sm:grid grid-cols-3 gap-6 items-end">
             {}
             <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
               <div className="relative group">
@@ -327,6 +330,27 @@ export default function HallOfFamePage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Mobile-only: simple top-3 list */}
+          <div className="sm:hidden space-y-3">
+            {[0, 1, 2].map((idx) => {
+              const user = hallOfFame.rankings[idx];
+              const medals = ["🥇", "🥈", "🥉"];
+              return (
+                <div key={user.address} className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+                  <span className="text-2xl">{medals[idx]}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate">{user.address.slice(0, 8)}…{user.address.slice(-6)}</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">Score: {user.score}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">${user.totalUsdVolume.toLocaleString()}</p>
+                    <p className="text-xs text-gray-500">{user.completionRate}% complete</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

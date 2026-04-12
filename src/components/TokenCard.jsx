@@ -1,5 +1,4 @@
 import { useState } from "react";
-import TokenStatsCard from "./TokenStatsCard";
 import { TOKENS } from "../../lib/tokens.config";
 
 
@@ -77,22 +76,42 @@ export default function TokenCard({ token, tokenKey, onSelectDCA }) {
 }
 
 
-function DCAOptionCard({ tokenKey, token, dcaConfig, onSelect }) {
+function TokenLogo({ logo, symbol, size = "w-8 h-8" }) {
+  if (logo) {
+    return (
+      <img src={logo} alt={symbol} className={`${size} rounded-full object-contain bg-white p-0.5 shadow-sm`} />
+    );
+  }
+  return (
+    <div className={`${size} rounded-full bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-xs font-bold text-purple-700 dark:text-purple-300 shadow-sm`}>
+      {symbol?.slice(0, 2)}
+    </div>
+  );
+}
 
+function DCAOptionCard({ tokenKey, token, dcaConfig, onSelect }) {
   const sourceToken = TOKENS[dcaConfig.source];
   const sourceSymbol = sourceToken ? sourceToken.symbol : dcaConfig.source;
+  const sourceLogo = sourceToken?.logo || null;
 
   return (
-    <div className="bg-white dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl p-5 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-md transition-all duration-200">
-      {}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-gray-800 dark:text-white">{sourceSymbol}</span>
-            <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-            <span className="text-lg font-bold text-purple-600 dark:text-purple-400">{token.symbol}</span>
+    <div className="bg-white dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl p-4 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-md transition-all duration-200">
+      <div className="flex items-center justify-between">
+        {/* Token pair with logos */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center -space-x-2">
+            <TokenLogo logo={sourceLogo} symbol={sourceSymbol} size="w-9 h-9" />
+            <TokenLogo logo={token.logo} symbol={token.symbol} size="w-9 h-9" />
+          </div>
+          <div className="ml-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base font-bold text-gray-800 dark:text-white">{sourceSymbol}</span>
+              <svg className="w-4 h-4 text-purple-500 dark:text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+              <span className="text-base font-bold text-purple-600 dark:text-purple-400">{token.symbol}</span>
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Spend {sourceSymbol}, accumulate {token.symbol}</p>
           </div>
         </div>
         <button
@@ -102,18 +121,11 @@ function DCAOptionCard({ tokenKey, token, dcaConfig, onSelect }) {
             destination: token,
             source: dcaConfig.source
           })}
-          className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-700 dark:to-purple-800 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 dark:hover:from-purple-600 dark:hover:to-purple-700 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 font-semibold text-sm"
+          className="flex-shrink-0 px-5 py-2 bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-700 dark:to-purple-800 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 dark:hover:from-purple-600 dark:hover:to-purple-700 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 font-semibold text-sm"
         >
-          Configure DCA
+          Select
         </button>
       </div>
-
-      {}
-      <TokenStatsCard
-        tokenSymbol={tokenKey}
-        sourceSymbol={dcaConfig.source}
-        compact={true}
-      />
     </div>
   );
 }

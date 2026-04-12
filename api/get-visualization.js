@@ -204,7 +204,7 @@ export default async function handler(req, res) {
     const dailyActivity = new Map();
     const tokenPairs = new Map();
 
-    // Timestamps are now stored in cache by sync-visualization — no RPC needed here
+    // Timestamps are now stored in cache by sync-visualization - no RPC needed here
     // Pre-fetch only token infos (just 4 unique tokens)
     const uniqueTokenAddresses = [...new Set([
       ...registrationEvents.flatMap(e => [e.args.sourceToken.toLowerCase(), e.args.destinationToken.toLowerCase()]),
@@ -394,9 +394,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Error in get-visualization:", error);
-    return res.status(500).json({
-      error: "Failed to fetch visualization data",
-      details: error.message
-    });
+    return res.status(500).json({ error: "Failed to fetch visualization data" });
   }
 }

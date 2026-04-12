@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { fetchPriceImpact } from '../lib/priceImpact.js';
 import { CONTRACT_ADDRESS } from '../lib/constants.js';
+import { rateLimit, getClientIp } from '../lib/rateLimit.js';
 
 function roundToQuarterHour(buy_time) {
   const [h, m] = buy_time.split(":").map(Number);
@@ -65,6 +66,9 @@ export default async function handler(req, res) {
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method Not Allowed" });
     }
+
+    const { allowed } = await rateLimit(getClientIp(req), 60, 60_000);
+    if (!allowed) return res.status(429).json({ error: "Too many requests" });
 
     const validInput = validateDCAInput(req.body);
 

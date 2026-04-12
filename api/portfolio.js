@@ -324,6 +324,13 @@ async function handleROIMetrics(address) {
                                       session.registration_expected_amount_out !== '0';
 
     if (!hasValidRegistrationData) {
+      const sessionEndTs = session.registration_timestamp + session.total_days * 86400;
+      const isTimeElapsed = Math.floor(Date.now() / 1000) > sessionEndTs + 86400; // 1-day buffer
+      const earlyStatus = session.session_status === 'cancelled'
+        ? 'cancelled'
+        : (session.session_status === 'completed' || relevantPurchases.length >= session.total_days || isTimeElapsed)
+          ? 'completed'
+          : 'active';
       return {
         ...session,
         dataQuality: 'insufficient',
@@ -331,7 +338,7 @@ async function handleROIMetrics(address) {
         reason: 'Registration price data missing - session created before ROI tracking was enabled',
         purchasesExecuted: relevantPurchases.length,
         expectedPurchases: session.total_days,
-        status: session.session_status || 'unknown',
+        status: earlyStatus,
         validPurchasesCount: 0,
         invalidPurchasesCount: relevantPurchases.length,
         totalTokensReceived: '0',
@@ -359,10 +366,15 @@ async function handleROIMetrics(address) {
     );
 
     // Only use purchases with valid data (NO FALLBACKS)
-    const validPurchases = relevantPurchases.filter(p =>
-      p.amount_out && p.amount_out !== '0' &&
-      p.amount_in && p.amount_in !== '0'
-    );
+    // Also cap to session.total_days purchases to prevent inflated ROI when
+    // the same pair is re-registered and extra purchases bleed into this window.
+    const validPurchases = relevantPurchases
+      .filter(p =>
+        p.amount_out && p.amount_out !== '0' &&
+        p.amount_in && p.amount_in !== '0'
+      )
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+      .slice(0, session.total_days);
 
     if (invalidPurchases.length > 0) {
       console.warn(`[ROI] Session ${sessionKey} has ${invalidPurchases.length} invalid purchases out of ${relevantPurchases.length} total`);
@@ -440,9 +452,16 @@ async function handleROIMetrics(address) {
     }
 
     // Determine session status
-    const purchaseCount = validPurchases.length;
+    // Use the broader relevantPurchases count (not just those with valid amount data)
+    // so that sessions aren't incorrectly kept as "active" due to partial data issues.
+    // Also fall back to time-elapsed check: if the session window has passed (registration +
+    // total_days days + 1 day buffer) mark it completed even if purchases weren't all recorded.
     const expectedPurchases = session.total_days;
-    const isCompleted = purchaseCount >= expectedPurchases;
+    const sessionEndTs = session.registration_timestamp + session.total_days * 86400;
+    const isTimeElapsed = Math.floor(Date.now() / 1000) > sessionEndTs + 86400;
+    const isCompleted = relevantPurchases.length >= expectedPurchases ||
+                        session.session_status === 'completed' ||
+                        isTimeElapsed;
     const status = session.session_status === 'cancelled'
       ? 'cancelled'
       : isCompleted
@@ -479,7 +498,7 @@ async function handleROIMetrics(address) {
       // Calculated metrics
       purchasesExecuted: relevantPurchases.length,
       expectedPurchases,
-      completionPercentage: (purchaseCount / expectedPurchases * 100).toFixed(1),
+      completionPercentage: (validPurchases.length / expectedPurchases * 100).toFixed(1),
       status,
 
       // ROI metrics
@@ -621,6 +640,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Address parameter required" });
     }
 
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return res.status(400).json({ error: "Invalid address format" });
+    }
+
     if (type === 'roi-metrics') {
       const data = await handleROIMetrics(address);
       return res.status(200).json(data);
@@ -632,10 +655,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error("Error in get-user-data:", error);
-    return res.status(500).json({
-      error: "Failed to fetch user data",
-      details: error.message
-    });
+    console.error("Error in portfolio handler:", error);
+    return res.status(500).json({ error: "Failed to fetch user data" });
   }
 }

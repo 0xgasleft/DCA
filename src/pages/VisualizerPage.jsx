@@ -1,35 +1,15 @@
 import { useState, useEffect } from "react";
 
 
-function formatTokenAmount(value, decimals = 18) {
+function formatTokenAmount(value) {
   const num = parseFloat(value);
-
-  if (num === 0) return "0";
-  if (isNaN(num)) return "0";
-
-  
-  if (num < 0.0001) {
-    
-    const scientificNotation = num.toExponential();
-    const [coefficient, exponent] = scientificNotation.split('e');
-    const exp = parseInt(exponent);
-
-    if (exp < -4) {
-      
-      return num.toExponential(4);
-    }
-
-    
-    return num.toFixed(8).replace(/\.?0+$/, '');
-  }
-
-  
-  if (num < 1) return num.toFixed(6).replace(/\.?0+$/, '');
-  if (num < 100) return num.toFixed(4).replace(/\.?0+$/, '');
-  if (num < 10000) return num.toFixed(2);
-
-  
-  return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if (num === 0 || isNaN(num)) return "0";
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2) + 'M';
+  if (num >= 1_000) return num.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  if (num >= 1) return num.toFixed(4).replace(/\.?0+$/, '');
+  if (num >= 0.001) return num.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  const places = Math.ceil(-Math.log10(num)) + 3;
+  return num.toFixed(Math.min(places, 18)).replace(/0+$/, '').replace(/\.$/, '') || '0';
 }
 
 export default function VisualizerPage() {
