@@ -1040,7 +1040,7 @@ export default function App() {
       <SpeedInsights />
       {registrationShare && (() => {
         const { sourceSymbol, destSymbol, days } = registrationShare;
-        const tweetText = `Just started a ${days}-day ${destSymbol} DCA on @ink_dca!\n\nAutomated daily buys on Ink - trustless & contract-secured👇\n`;
+        const tweetText = `Just started a ${days}-day ${destSymbol} DCA on @ink_dca!\n\nAutomated daily buys on Ink - trustless & contract-secured 👇\n\n`;
         const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(window.location.origin)}`;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
