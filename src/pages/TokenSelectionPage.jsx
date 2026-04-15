@@ -33,8 +33,7 @@ export default function TokenSelectionPage({ onSelectDCA }) {
       <div className="mt-8 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 max-w-4xl mx-auto">
         <p className="text-sm text-gray-700 dark:text-gray-300">
           <span className="font-semibold">💡 Tip:</span> Each token may have multiple
-          DCA options with different source currencies. Compare the stats to choose
-          the best option for you.
+          DCA options with different source currencies. Click a token to expand its available strategies.
         </p>
       </div>
     </div>

@@ -22,6 +22,8 @@
 - **Trust minimized** - Your funds never leave your control; all operations are executed on-chain via smart contracts
 - **Scheduled Execution** - Set your preferred time and frequency; purchases execute automatically at the exact time you choose
 - **Multiple Token Pairs** - Support for various DCA strategies (ETH → kBTC, USDT0 → ETH, USDT0 → ANITA, etc.)
+- **Live Execution Feed** - Real-time stream of on-chain DCA purchases with animated entries and pair filtering
+- **Best Buy Time Optimizer** - Data-driven hour recommendations based on historical exchange rate performance
 - **Real-time Statistics** - Track your DCA performance with volume metrics and purchase history
 - **Optimal Pricing** - Automatic routing through Relay Protocol for best available prices
 - **Price Impact Tracking** - View actual execution metrics including price impact and slippage
@@ -51,6 +53,7 @@
 - **React 19** - UI framework
 - **Vite** - Build tool and dev server
 - **Tailwind CSS** - Utility-first styling
+- **Space Grotesk** - Google Font used for the wordmark
 - **ethers.js v6** - Ethereum wallet integration
 - **Sonner** - Toast notifications
 - **React Icons** - Icon library
@@ -112,7 +115,7 @@ RPC_URL="https://rpc-qnd.inkonchain.com"
 RPC_VISUALIZE_URL="https://rpc-qnd.inkonchain.com"
 
 # Wallet (backend execution)
-PK="your_private_key_here"
+RAND_K="your_private_key_here"
 
 # Database (Supabase)
 SUPABASE_URL="https://your-project.supabase.co"
@@ -131,7 +134,7 @@ KV_REST_API_TOKEN="your_redis_token"
 VISUALIZER_PASSWORD="your_visualizer_password_here"
 ```
 
-**Important:** Never commit your `.env` file to version control.
+**Important:** Never commit your `.env` file to version control. It is already listed in `.gitignore`.
 
 ### Running Locally
 
@@ -261,6 +264,7 @@ function setWhitelistedTo(address _token, address _to, bool _whitelist) external
    - Approves token spending (if using ERC20)
    - Calls `registerForDCAWithETH` or `registerForDCAWithToken` on smart contract
    - Frontend calls `/api/register-dca` to record stats and initial price snapshot in Supabase
+   - A share-on-X modal is shown after successful registration
 
 2. **Automated Execution**
    - Upstash QStash triggers `/api/check-buyers` every 15 minutes
@@ -268,9 +272,11 @@ function setWhitelistedTo(address _token, address _to, bool _whitelist) external
    - For each matched session, fetches a Relay quote and calls `runDCA` on the contract
    - Relay Protocol executes the swap with optimal pricing
    - Execution attempt, price impact and stats stored in Supabase
+   - Failed executions are retried once after a 3-second delay
 
 3. **User Dashboard**
-   - Frontend queries `/api/portfolio` for purchase history and ROI metrics
+   - Frontend polls active sessions every 60 seconds and refreshes immediately after registration
+   - Queries `/api/portfolio` for purchase history and ROI metrics
    - Displays active sessions with progress bars and countdown timers
    - Shows execution history with price impact per swap
    - Allows users to stop DCA and claim refunds
@@ -288,6 +294,7 @@ function setWhitelistedTo(address _token, address _to, bool _whitelist) external
 - **Daily Amount**: Set how much to invest per day
 - **Duration**: Choose investment period (1-365 days)
 - **Execution Time**: Select exact time for daily purchases (local timezone, converted to UTC)
+- **Best Buy Time Optimizer**: Data-driven hour suggestions ranked by historical exchange rate performance
 - **Balance Check**: Real-time wallet balance validation
 - **Token Approval**: One-click ERC20 approval with progress tracking
 - **Expected Metrics**: Preview price impact and total allocation before registration
@@ -296,6 +303,8 @@ function setWhitelistedTo(address _token, address _to, bool _whitelist) external
 - Visual progress bars showing time until next purchase
 - Detailed metrics: daily amount, days remaining, total refundable
 - Real-time countdown timers
+- Auto-refresh immediately after registration (with a 4-second RPC lag retry)
+- Background poll every 60 seconds while wallet is connected
 - One-click stop & refund with confirmation
 
 ### 4. Purchase History
@@ -310,12 +319,21 @@ function setWhitelistedTo(address _token, address _to, bool _whitelist) external
 - Price volatility: min/max/avg exchange rate across executions
 - Win rate across completed sessions
 
-### 6. Hall of Fame
+### 6. Live Execution Feed
+- Real-time stream of all on-chain DCA purchases, refreshed every 30 seconds
+- Animated item entry: each row fades and slides in with a staggered delay on load
+- New live arrivals pulse with a green ring flash animation
+- Pair filter buttons to isolate specific token pairs (full-page view)
+- Fully responsive two-line layout — wallet address truncates, amounts wrap cleanly
+- Embedded preview on the landing page (5 most recent); full feed at `/feed`
+
+### 7. Hall of Fame
 - Public leaderboard ranking all users by score
 - Score factors: USD volume, consistency (completion rate), diversity (token pairs), commitment (avg session length)
 - Tiers: Beginner → Rookie → Confirmed → Professional → Expert → Legend
+- Graceful handling when ETH price is unavailable or new tokens are encountered
 
-### 7. Theme Support
+### 8. Theme Support
 - Automatic dark/light mode based on system preference
 - Manual toggle with persistence to localStorage
 
@@ -323,21 +341,29 @@ function setWhitelistedTo(address _token, address _to, bool _whitelist) external
 
 ## API Endpoints
 
-All API routes are serverless functions deployed on Vercel.
+All API routes are serverless functions deployed on Vercel. All public endpoints are rate-limited via Upstash Redis.
 
 ### Public Endpoints
 
-#### `/api/get-dca-stats` (GET)
-Aggregated statistics for a token pair.
-- Params: `?source=0x...&destination=0x...`
-- Returns: `volume_registered`, `volume_executed`, `purchase_count`
-- Rate limit: 60 requests/min per IP
+#### `/api/get-recent-executions` (GET)
+Returns the 20 most recent on-chain DCA executions for the live feed.
+- Returns: buyer (truncated), token symbols, amounts, timestamp, `txHash`
+- Rate limit: 30 requests/min per IP
+- Cache: `s-maxage=25, stale-while-revalidate=5`
+
+#### `/api/get-best-buy-time` (GET)
+Returns the historically best and worst UTC hours to execute a DCA for a given token pair, based on day-normalized exchange rate analysis.
+- Params: `?source=0x...&destination=0x...` (must be valid Ethereum addresses)
+- Returns: `best_hours`, `worst_hours`, `improvement_potential`, `sample_size`
+- Returns `insufficient_data: true` if fewer than 10 historical executions exist
+- Rate limit: 20 requests/min per IP
 
 #### `/api/portfolio` (GET)
 User-specific data. Two modes via `type` query param:
 - `?address=0x...&type=purchase-history` — Full purchase history with price impact per swap
 - `?address=0x...&type=roi-metrics` — ROI performance metrics per DCA session
-- Rate limit: 10 requests per 30s per IP
+- Address must be a valid Ethereum address (`0x` + 40 hex chars)
+- Rate limit: 10 requests/min per IP
 
 #### `/api/get-hall-of-fame` (GET)
 Ranked leaderboard of all users with scores, tiers, and stats.
@@ -348,30 +374,45 @@ Ranked leaderboard of all users with scores, tiers, and stats.
 #### `/api/register-dca` (POST)
 Called by the frontend after a successful on-chain registration. Records stats and initial price snapshot for ROI tracking.
 - Body: `{ address, buy_time, source_token, destination_token, tx_hash, amount_per_day, days_left, block_number }`
+- All fields are format-validated (regex) before processing
+- Rate limit: 60 requests/min per IP
 
 ### Protected Endpoints (Upstash QStash only)
 
 #### `/api/check-buyers` (GET)
-Cron job — runs every 15 minutes, matches sessions due for execution, triggers swap execution.
-- Auth: `upstash-schedule-id` header
+Cron job — runs every 15 minutes, matches sessions due for execution, triggers swap execution via Relay Protocol. Failed swaps are retried once after 3 seconds.
+- Auth: `upstash-schedule-id` header must match `UPSTASH_CHECK_BUYERS_ID`
 
-#### `/api/sync-purchase-cache` (GET/POST)
-Syncs on-chain purchase events to Supabase cache.
-- Auth: `upstash-schedule-id` header
+#### `/api/sync-purchase-cache` (GET)
+Syncs on-chain `PurchaseExecuted` events to Supabase per-user cache, resuming from the last synced block.
+- Auth: `upstash-schedule-id` header must match `UPSTASH_SYNC_CACHE_ID`
 
 ### Admin Endpoints (password protected)
 
-#### `/api/get-dca-attempt-stats` (GET/POST)
+#### `/api/get-dca-attempt-stats` (GET)
 Execution attempt tracking: success/fail rate, daily timeline, top errors, router usage.
-- Params: `password`, optional `buyer`, `token`, `days`
+- Params: `password` (POST body recommended), optional `buyer`, `token`, `days`
+- Password read from `VISUALIZER_PASSWORD` environment variable
 
 #### `/api/sync-visualization` (POST)
-Syncs all on-chain events (registrations, purchases, cancellations) to Supabase visualization cache.
+Syncs all on-chain events (registrations, purchases, cancellations) to Supabase visualization cache in configurable block chunks.
 - Body: `{ password }`
+- Password read from `VISUALIZER_PASSWORD` environment variable
 
 #### `/api/get-visualization` (POST)
-Returns cached visualization data for the admin dashboard.
+Returns processed visualization data (volumes, daily activity, token pairs, live session counts) for the admin dashboard.
 - Body: `{ password }`
+
+---
+
+## Security
+
+- **Rate limiting** on every public and user-facing API endpoint via Upstash Redis (distributed, works across serverless instances)
+- **Input validation** on all address and token parameters — Ethereum address format enforced before any RPC or database call
+- **Cron authentication** via Upstash schedule ID header — `check-buyers` and `sync-purchase-cache` reject any request without the correct ID
+- **No secrets in source** — all passwords and keys are read from environment variables; `.env` is gitignored
+- **Error messages** in 500 responses do not expose internal details (RPC URLs, stack traces, Supabase errors)
+- **Execution deduplication** — retry logic records each attempt exactly once in the tracking database
 
 ---
 

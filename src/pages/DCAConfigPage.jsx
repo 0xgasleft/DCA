@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { FaSpinner } from "react-icons/fa";
-import TokenStatsCard from "../components/TokenStatsCard";
 import ClockTimePicker from "../components/ClockTimePicker.jsx";
 import { formatNumber } from "../../lib/utils.js";
 import { fetchPriceImpact, formatPriceImpact, getPriceImpactSeverity } from "../../lib/priceImpact.js";
@@ -27,6 +26,7 @@ export default function DCAConfigPage({
   const [buyTime, setBuyTime] = useState("00:00");
   const [priceImpactData, setPriceImpactData] = useState(null);
   const [fetchingImpact, setFetchingImpact] = useState(false);
+  const [bestBuyTime, setBestBuyTime] = useState(null);
 
   const totalAmount = parseFloat(amountPerDay || 0) * parseInt(daysLeft || 0);
   const fee = totalAmount * 0.001;
@@ -69,6 +69,24 @@ export default function DCAConfigPage({
     const timeoutId = setTimeout(fetchImpact, 1500);
     return () => clearTimeout(timeoutId);
   }, [amountPerDay, selectedPair]);
+
+  // Fetch best buy time for this pair from historical execution data
+  useEffect(() => {
+    setBestBuyTime(null);
+    const sourceAddr = selectedPair.source.isNative
+      ? "0x0000000000000000000000000000000000000000"
+      : selectedPair.source.address;
+    const destAddr = selectedPair.destination.address;
+
+    fetch(`/api/get-best-buy-time?source=${sourceAddr}&destination=${destAddr}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.insufficient_data && data.best_hours?.length > 0) {
+          setBestBuyTime(data);
+        }
+      })
+      .catch(() => {});
+  }, [selectedPair]);
 
   const handleSubmit = () => {
     onSubmit({ amountPerDay, daysLeft, buyTime });
@@ -139,14 +157,6 @@ export default function DCAConfigPage({
             </div>
           )}
         </div>
-      </div>
-
-      {}
-      <div className="bg-white dark:bg-gray-800 border-x border-purple-200 dark:border-gray-700 p-6">
-        <TokenStatsCard
-          tokenSymbol={selectedPair.destinationKey}
-          sourceSymbol={selectedPair.sourceKey}
-        />
       </div>
 
       {}
@@ -374,25 +384,81 @@ export default function DCAConfigPage({
         {}
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-            Daily Buy Time (Your Local Time)
+            Daily Buy Time
           </label>
           <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-            Select when you want your daily purchase to execute in <span className="font-semibold">your local timezone</span>
+            Pick a time in <span className="font-semibold">your local timezone</span> - it will be stored as UTC automatically
           </p>
           <ClockTimePicker value={buyTime} onChange={setBuyTime} />
-          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <div className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-              <div>
-                <p className="text-xs text-blue-800 dark:text-blue-300 font-medium">Timezone Info</p>
-                <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
-                  Your timezone: <span className="font-semibold">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
-                </p>
+
+          {/* Buy Time Optimizer — powered by historical execution data */}
+          {bestBuyTime && (() => {
+            // Convert UTC hour from backend to user's local hour
+            const utcToLocal = (utcHour) => {
+              const d = new Date();
+              d.setUTCHours(utcHour, 0, 0, 0);
+              return d.getHours();
+            };
+            const rankIcons = [
+              // #1 — crown outline
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-amber-400">
+                <path d="M2 19h20M4 19l2-8 5 4 1-8 1 8 5-4 2 8"/>
+              </svg>,
+              // #2 — double chevron up
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-slate-400">
+                <path d="M5 17l7-7 7 7M5 11l7-7 7 7"/>
+              </svg>,
+              // #3 — single chevron up
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-amber-700/80">
+                <path d="M5 15l7-7 7 7"/>
+              </svg>,
+            ];
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            return (
+              <div className="mt-4 border border-emerald-200 dark:border-emerald-800 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-600 dark:bg-emerald-800">
+                  <span className="text-xs font-bold text-white uppercase tracking-wide">Buy Time Optimizer</span>
+                  <span className="text-xs text-emerald-100 opacity-80">{bestBuyTime.sample_size} executions · {tz}</span>
+                </div>
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20">
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 mb-3">
+                    Times shown in your local timezone. Click to apply.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {bestBuyTime.best_hours.map((h, i) => {
+                      const localHour = utcToLocal(h.hour);
+                      const localLabel = `${String(localHour).padStart(2, "0")}:00`;
+                      const perfSign = parseFloat(h.performancePct) >= 0 ? "+" : "";
+                      const isGreen = parseFloat(h.performancePct) >= 0;
+                      return (
+                        <button
+                          key={h.hour}
+                          type="button"
+                          onClick={() => setBuyTime(localLabel)}
+                          title={`Apply ${localLabel} as your buy time`}
+                          className="group flex flex-col items-center gap-1 px-3 py-3 rounded-xl bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-700 hover:border-emerald-400 dark:hover:border-emerald-500 hover:shadow-md hover:shadow-emerald-100 dark:hover:shadow-emerald-900/30 cursor-pointer transition-all active:scale-95 select-none"
+                        >
+                          {rankIcons[i]}
+                          <span className="text-base font-bold text-gray-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">{localLabel}</span>
+                          <span className={`text-xs font-semibold ${isGreen ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+                            {perfSign}{h.performancePct}%
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {bestBuyTime.best_hours?.[0]?.performancePct && (
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400 mb-1.5">
+                      Up to <span className="font-bold">+{bestBuyTime.best_hours[0].performancePct}%</span> more tokens by choosing the right hour
+                    </p>
+                  )}
+                  <p className="text-[11px] text-emerald-600/60 dark:text-emerald-500/70 italic">
+                    Not financial advice. Past patterns are not a guarantee of future results.
+                  </p>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
 
         {}
@@ -427,20 +493,27 @@ export default function DCAConfigPage({
             </button>
           )}
 
-          <button
-            onClick={handleSubmit}
-            disabled={needsApproval || loading || !amountPerDay || !daysLeft}
-            className="w-full py-4 bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-700 dark:to-purple-800 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-purple-800 dark:hover:from-purple-600 dark:hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <FaSpinner className="animate-spin" />
-                Processing...
-              </span>
-            ) : (
-              "Start DCA"
-            )}
-          </button>
+          {/* Pulsing ring when the button is ready — draws the eye without being intrusive */}
+          <div className={`relative rounded-xl transition-all duration-300 ${
+            !needsApproval && !loading && amountPerDay && daysLeft
+              ? "ring-2 ring-offset-2 ring-pink-400 dark:ring-offset-gray-800 ring-offset-white"
+              : ""
+          }`}>
+            <button
+              onClick={handleSubmit}
+              disabled={needsApproval || loading || !amountPerDay || !daysLeft}
+              className="w-full py-4 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 text-white font-bold text-base tracking-wide rounded-xl disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-pink-500/30 hover:shadow-xl hover:shadow-pink-500/50 hover:brightness-110 transform hover:scale-[1.02] transition-all duration-200"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <FaSpinner className="animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                "Start DCA"
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

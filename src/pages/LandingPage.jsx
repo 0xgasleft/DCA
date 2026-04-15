@@ -1,5 +1,6 @@
 
 import ThemeToggle from "../components/ThemeToggle";
+import LiveFeedPage from "./LiveFeedPage";
 
 export default function LandingPage({ onConnect }) {
   return (
@@ -10,13 +11,13 @@ export default function LandingPage({ onConnect }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img src="/ink_dca_logo.png" alt="DCA on Ink" className="w-10 h-10" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-gray-900 dark:text-white" style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.01em' }}>
                 DCA on <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Ink</span>
               </span>
             </div>
             <div className="flex items-center gap-4">
               {}
-              <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-3">
                 <a
                   href="https://t.me/+qzZO0ePqZts3YmQ0"
                   target="_blank"
@@ -72,13 +73,13 @@ export default function LandingPage({ onConnect }) {
                 Trustless DCA on Ink
               </div>
 
-              <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
                 Automate Your Crypto Investments
               </h1>
 
               <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
                 Set up dollar-cost averaging strategies for kBTC, ETH, and other tokens.
-                No manual intervention needed. Your investments run on autopilot with guaranteed execution.
+                No manual intervention needed. Your investments run on autopilot with enforced execution.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
@@ -150,6 +151,36 @@ export default function LandingPage({ onConnect }) {
               {}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-br from-purple-200 to-pink-200 rounded-3xl -z-10 blur-3xl opacity-30"></div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Live Activity Feed — social proof for visitors */}
+      <section className="py-20 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
+        <div className="max-w-3xl mx-auto px-6">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-full text-sm font-medium text-green-700 dark:text-green-300 mb-4">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              Live on Ink
+            </div>
+            <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              Real Trades, Right Now
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300">
+              Every entry below is a real on-chain DCA execution - no simulation, no demo data.
+            </p>
+          </div>
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4">
+            <LiveFeedPage embedded={true} />
+          </div>
+          <div className="text-center mt-6">
+            <a
+              href="/feed"
+              className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-800 font-medium"
+              onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/feed'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            >
+              View all executions →
+            </a>
           </div>
         </div>
       </section>
@@ -291,7 +322,7 @@ export default function LandingPage({ onConnect }) {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img src="/ink_dca_logo.png" alt="DCA on Ink" className="w-8 h-8" />
-              <span className="text-lg font-semibold text-gray-900 dark:text-white">DCA on Ink</span>
+              <span className="text-lg font-semibold text-gray-900 dark:text-white" style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.01em' }}>DCA on Ink</span>
             </div>
             <div className="flex flex-col md:flex-row items-center gap-4">
               <a

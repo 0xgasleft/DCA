@@ -12,11 +12,24 @@ import TokenSelectionPage from "./pages/TokenSelectionPage.jsx";
 import DCAConfigPage from "./pages/DCAConfigPage.jsx";
 import ThemeToggle from "./components/ThemeToggle.jsx";
 
-// Lazy load heavy components to reduce initial bundle size
-const VisualizerPage = lazy(() => import("./pages/VisualizerPage.jsx"));
-const HallOfFamePage = lazy(() => import("./pages/HallOfFamePage.jsx"));
-const PortfolioPerformancePage = lazy(() => import("./pages/PortfolioPerformancePage.jsx"));
+// Lazy load heavy components to reduce initial bundle size.
+// If a chunk 404s (stale hash after a new Vercel deployment), reload once to fetch fresh assets.
+const lazyWithChunkReload = (factory) =>
+  lazy(() =>
+    factory().catch((err) => {
+      if (!sessionStorage.getItem("chunk_reloaded")) {
+        sessionStorage.setItem("chunk_reloaded", "1");
+        window.location.reload();
+        return new Promise(() => {}); // never resolves — reload takes over
+      }
+      throw err; // second failure: let the Suspense error boundary handle it
+    })
+  );
 
+const VisualizerPage = lazyWithChunkReload(() => import("./pages/VisualizerPage.jsx"));
+const HallOfFamePage = lazyWithChunkReload(() => import("./pages/HallOfFamePage.jsx"));
+const PortfolioPerformancePage = lazyWithChunkReload(() => import("./pages/PortfolioPerformancePage.jsx"));
+const LiveFeedPage = lazyWithChunkReload(() => import("./pages/LiveFeedPage.jsx"));
 
 import { CONTRACT_ABI, ERC20_ABI, CONTRACT_ADDRESS } from "../lib/constants.js";
 import { TOKENS } from "../lib/tokens.config.js";
@@ -120,7 +133,9 @@ export default function App() {
   const [approvalGranted, setApprovalGranted] = useState(false);
   const [isExemptedFromFees, setIsExemptedFromFees] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [isConnecting, setIsConnecting] = useState(false); 
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [registrationShare, setRegistrationShare] = useState(null);
+
 
   const provider = window.ethereum ? new ethers.BrowserProvider(window.ethereum) : null;
   const contract = provider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider) : null;
@@ -158,6 +173,7 @@ export default function App() {
 
     checkStoredSession();
   }, []);
+
 
 
   const calculateNextPurchaseProgress = (buyTimeUTC) => {
@@ -437,10 +453,10 @@ export default function App() {
   }, [walletConnected]);
 
   useEffect(() => {
-    if (!walletConnected || dcaSessions.length === 0) return;
+    if (!walletConnected) return;
     const interval = setInterval(fetchDcaInfo, 60_000);
     return () => clearInterval(interval);
-  }, [walletConnected, dcaSessions.length]);
+  }, [walletConnected]);
 
   useEffect(() => {
     if (walletConnected && walletAddress) {
@@ -855,15 +871,22 @@ export default function App() {
 
 
       fetchDcaInfo();
+      fetchActivePurchases(walletAddress);
+      // RPC nodes can lag a few seconds after a tx confirms — retry once
+      setTimeout(() => { fetchDcaInfo(); fetchActivePurchases(walletAddress); }, 4000);
 
       setStatus("Registered successfully!");
       toast.success(`DCA registered successfully! Executing daily at ${time}`);
 
+      setRegistrationShare({
+        sourceSymbol: selectedTokenPair.source.symbol,
+        destSymbol: selectedTokenPair.destination.symbol,
+        days,
+      });
 
       setAmountPerDay("");
       setDaysLeft("");
       setBuyTime("00:00");
-
 
       setSelectedTokenPair(null);
 
@@ -983,10 +1006,91 @@ export default function App() {
     );
   }
 
+  if (currentRoute === '/feed') {
+    return (
+      <>
+        <Toaster position="top-center" richColors closeButton />
+        <SpeedInsights />
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-6">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <button
+                onClick={() => { window.history.pushState({}, '', '/'); setCurrentRoute('/'); }}
+                className="flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 font-medium"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back
+              </button>
+              <ThemeToggle />
+            </div>
+            <Suspense fallback={<div className="flex justify-center py-20"><FaSpinner className="text-4xl text-purple-500 animate-spin" /></div>}>
+              <LiveFeedPage />
+            </Suspense>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Toaster position="top-center" richColors closeButton />
       <SpeedInsights />
+      {registrationShare && (() => {
+        const { sourceSymbol, destSymbol, days } = registrationShare;
+        const tweetText = `Just started a ${days}-day ${destSymbol} DCA on @ink_dca!\n\nAutomated daily buys on Ink - trustless & contract-secured👇\n`;
+        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(window.location.origin)}`;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRegistrationShare(null)} />
+            <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-sm w-full overflow-hidden border border-gray-200 dark:border-gray-700">
+              <div className="h-1 bg-gradient-to-r from-purple-500 to-pink-500" />
+              <button
+                onClick={() => setRegistrationShare(null)}
+                className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                aria-label="Dismiss"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <div className="px-6 pt-6 pb-5 text-center">
+                <div className="inline-flex items-center gap-1.5 bg-purple-50 dark:bg-purple-500/10 border border-purple-100 dark:border-purple-500/20 rounded-full px-3 py-1 mb-4">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                  <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 tracking-wide">LIVE</span>
+                </div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+                  {sourceSymbol} → {destSymbol}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  {days}-day strategy is now running
+                </p>
+                <div className="space-y-2">
+                  <a
+                    href={tweetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 bg-gray-950 dark:bg-white text-white dark:text-gray-950 rounded-xl font-semibold text-sm hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                    Share on X
+                  </a>
+                  <button
+                    onClick={() => setRegistrationShare(null)}
+                    className="w-full py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {!walletConnected ? (
         showConnectPage ? (
           <ConnectWalletPage
@@ -1000,61 +1104,39 @@ export default function App() {
         <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 transition-colors duration-200">
       {}
       <div className="max-w-6xl mx-auto mb-6">
-        <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 shadow-md border border-gray-200 dark:border-gray-700 gap-2">
           {}
           <button
             onClick={disconnectWallet}
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
+            className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity cursor-pointer flex-shrink-0"
             title="Return to landing page"
           >
-            <img src="/ink_dca_logo.png" alt="DCA on Ink" className="w-10 h-10" />
-            <span className="text-xl font-bold text-gray-900 dark:text-white">DCA on <span className="text-purple-600 dark:text-purple-400">Ink</span></span>
+            <img src="/ink_dca_logo.png" alt="DCA on Ink" className="w-8 h-8 sm:w-10 sm:h-10" />
+            <span className="text-base sm:text-xl font-bold text-gray-900 dark:text-white" style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.01em' }}>DCA on <span className="text-purple-600 dark:text-purple-400">Ink</span></span>
           </button>
 
           {}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             {}
-            <div className="flex items-center gap-3">
-              <a
-                href="https://t.me/+qzZO0ePqZts3YmQ0"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                aria-label="Telegram"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-                </svg>
+            <div className="hidden sm:flex items-center gap-2">
+              <a href="https://t.me/+qzZO0ePqZts3YmQ0" target="_blank" rel="noopener noreferrer" className="p-2 text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors" aria-label="Telegram">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg>
               </a>
-              <a
-                href="https://x.com/ink_dca"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                aria-label="X (Twitter)"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                </svg>
+              <a href="https://x.com/ink_dca" target="_blank" rel="noopener noreferrer" className="p-2 text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors" aria-label="X (Twitter)">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
               </a>
-              <a
-                href="mailto:dca.on.ink@gmail.com"
-                className="p-2 text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                aria-label="Support"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
+              <a href="mailto:dca.on.ink@gmail.com" className="p-2 text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors" aria-label="Support">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
               </a>
             </div>
             <ThemeToggle />
-            <div className="px-4 py-2 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded-lg">
-              <span className="text-xs text-gray-600 dark:text-gray-400 mr-2">Connected:</span>
-              <span className="font-mono text-purple-600 dark:text-purple-400 font-semibold">{formatAddress(walletAddress)}</span>
+            <div className="px-2 sm:px-4 py-1.5 sm:py-2 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded-lg min-w-0">
+              <span className="hidden sm:inline text-xs text-gray-600 dark:text-gray-400 mr-2">Connected:</span>
+              <span className="font-mono text-purple-600 dark:text-purple-400 font-semibold text-xs sm:text-sm">{formatAddress(walletAddress)}</span>
             </div>
             <button
               onClick={disconnectWallet}
-              className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors font-medium"
+              className="px-2 sm:px-4 py-1.5 sm:py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors font-medium text-xs sm:text-sm flex-shrink-0"
             >
               Disconnect
             </button>
@@ -1064,131 +1146,147 @@ export default function App() {
 
       {}
       <div className="max-w-6xl mx-auto mb-6">
-        <div className="flex flex-col sm:flex-row gap-4 justify-center bg-gradient-to-r from-purple-50 to-pink-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl p-4 shadow-lg border border-purple-100 dark:border-gray-600">
-          <button
-            onClick={() => setActiveTab("hallOfFame")}
-            className={`group relative px-6 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
-              activeTab === "hallOfFame"
-                ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-xl shadow-yellow-300 dark:shadow-yellow-900/50"
-                : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-yellow-50 dark:hover:bg-gray-600 hover:border-yellow-300 dark:hover:border-yellow-500 shadow-md hover:shadow-xl border border-yellow-200 dark:border-gray-600"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <svg className={`w-6 h-6 transition-colors ${activeTab === "hallOfFame" ? "text-white" : "text-yellow-600 group-hover:text-yellow-700"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <div className="text-left">
-                <div className="text-base font-bold leading-tight">Hall of Fame</div>
-                <div className={`text-xs leading-tight mt-0.5 ${activeTab === "hallOfFame" ? "text-yellow-100" : "text-gray-500 group-hover:text-yellow-600"}`}>Top DCA Strategists</div>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("performance")}
-            className={`group relative px-6 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
-              activeTab === "performance"
-                ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xl shadow-emerald-300 dark:shadow-emerald-900/50"
-                : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-600 hover:border-emerald-300 dark:hover:border-emerald-500 shadow-md hover:shadow-xl border border-emerald-200 dark:border-gray-600"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <svg className={`w-6 h-6 transition-colors ${activeTab === "performance" ? "text-white" : "text-emerald-600 group-hover:text-emerald-700"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <div className="text-left">
-                <div className="text-base font-bold leading-tight">Performance</div>
-                <div className={`text-xs leading-tight mt-0.5 ${activeTab === "performance" ? "text-emerald-100" : "text-gray-500 group-hover:text-emerald-600"}`}>Track your ROI</div>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("register")}
-            className={`group relative px-6 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
-              activeTab === "register"
-                ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-xl shadow-purple-300 dark:shadow-purple-900/50"
-                : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-gray-600 hover:border-purple-300 dark:hover:border-purple-500 shadow-md hover:shadow-xl border border-purple-200 dark:border-gray-600"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <svg className={`w-6 h-6 transition-colors ${activeTab === "register" ? "text-white" : "text-purple-600 group-hover:text-purple-700"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl p-3 shadow-lg border border-purple-100 dark:border-gray-600">
+          {/* Row 1: Your DCA Actions */}
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <button
+              onClick={() => setActiveTab("register")}
+              className={`group px-3 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-[1.02] ${
+                activeTab === "register"
+                  ? "bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 text-white shadow-lg shadow-pink-500/30"
+                  : "bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 text-white shadow-md shadow-pink-500/20 hover:shadow-lg hover:shadow-pink-500/30 hover:brightness-110"
+              }`}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
+                <span className="text-sm font-bold leading-tight">Register DCA</span>
+                <span className="text-[10px] leading-tight text-white/80">New strategy</span>
               </div>
-              <div className="text-left">
-                <div className="text-base font-bold leading-tight">Register DCA</div>
-                <div className={`text-xs leading-tight mt-0.5 ${activeTab === "register" ? "text-purple-100" : "text-gray-500 group-hover:text-purple-600"}`}>Create new strategy</div>
-              </div>
-            </div>
-          </button>
+            </button>
 
-          <button
-            onClick={() => setActiveTab("activeSession")}
-            disabled={dcaSessions.length === 0}
-            className={`group relative px-6 py-4 rounded-xl font-semibold transition-all duration-300 ${
-              dcaSessions.length === 0
-                ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border-2 border-dashed border-gray-300 dark:border-gray-600 opacity-60"
-                : activeTab === "activeSession"
-                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-xl shadow-purple-300 dark:shadow-purple-900/50 transform hover:scale-105"
-                  : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-gray-600 hover:border-purple-300 dark:hover:border-purple-500 shadow-md hover:shadow-xl border border-purple-200 dark:border-gray-600 transform hover:scale-105"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="relative flex-shrink-0">
-                <svg className={`w-6 h-6 transition-colors ${dcaSessions.length === 0 ? "text-gray-400 dark:text-gray-500" : activeTab === "activeSession" ? "text-white" : "text-purple-600 dark:text-purple-400 group-hover:text-purple-700 dark:group-hover:text-purple-300"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-                {dcaSessions.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-green-500 dark:bg-green-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-md">
-                    {dcaSessions.length}
-                  </span>
-                )}
-              </div>
-              <div className="text-left">
-                <div className="text-base font-bold leading-tight">Active Strategies</div>
-                <div className={`text-xs leading-tight mt-0.5 transition-colors ${dcaSessions.length === 0 ? "text-gray-400 dark:text-gray-500" : activeTab === "activeSession" ? "text-purple-100" : "text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-300"}`}>
-                  {dcaSessions.length > 0 ? `${dcaSessions.length} running` : "No active DCAs"}
+            <button
+              onClick={() => setActiveTab("activeSession")}
+              disabled={dcaSessions.length === 0}
+              className={`group px-3 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                dcaSessions.length === 0
+                  ? "bg-gray-100 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-dashed border-gray-300 dark:border-gray-600 opacity-60"
+                  : activeTab === "activeSession"
+                    ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg hover:scale-[1.02]"
+                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-gray-600 shadow-sm border border-purple-200 dark:border-gray-600 hover:scale-[1.02]"
+              }`}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <div className="relative">
+                  <svg className={`w-5 h-5 ${dcaSessions.length === 0 ? "text-gray-400" : activeTab === "activeSession" ? "text-white" : "text-purple-600 dark:text-purple-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  {dcaSessions.length > 0 && (
+                    <span className="absolute -top-2 -right-3 bg-green-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                      {dcaSessions.length}
+                    </span>
+                  )}
                 </div>
+                <span className="text-sm font-bold leading-tight">Active</span>
+                <span className={`text-[10px] leading-tight ${dcaSessions.length === 0 ? "text-gray-400" : activeTab === "activeSession" ? "text-purple-100" : "text-gray-400 dark:text-gray-500"}`}>
+                  {dcaSessions.length > 0 ? `${dcaSessions.length} running` : "None running"}
+                </span>
               </div>
-            </div>
-          </button>
+            </button>
 
-          <button
-            onClick={() => setActiveTab("history")}
-            disabled={activePurchases.length === 0}
-            className={`group relative px-6 py-4 rounded-xl font-semibold transition-all duration-300 ${
-              activePurchases.length === 0
-                ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border-2 border-dashed border-gray-300 dark:border-gray-600 opacity-60"
-                : activeTab === "history"
-                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-xl shadow-purple-300 dark:shadow-purple-900/50 transform hover:scale-105"
-                  : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-gray-600 hover:border-purple-300 dark:hover:border-purple-500 shadow-md hover:shadow-xl border border-purple-200 dark:border-gray-600 transform hover:scale-105"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="relative flex-shrink-0">
-                <svg className={`w-6 h-6 transition-colors ${activePurchases.length === 0 ? "text-gray-400 dark:text-gray-500" : activeTab === "history" ? "text-white" : "text-purple-600 dark:text-purple-400 group-hover:text-purple-700 dark:group-hover:text-purple-300"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {activePurchases.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-blue-500 dark:bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-md">
-                    {activePurchases.length}
-                  </span>
-                )}
-              </div>
-              <div className="text-left">
-                <div className="text-base font-bold leading-tight">DCA History</div>
-                <div className={`text-xs leading-tight mt-0.5 transition-colors ${activePurchases.length === 0 ? "text-gray-400 dark:text-gray-500" : activeTab === "history" ? "text-purple-100" : "text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-300"}`}>
-                  {activePurchases.length > 0 ? `${activePurchases.length} purchases` : "No purchases yet"}
+            <button
+              onClick={() => setActiveTab("history")}
+              disabled={activePurchases.length === 0}
+              className={`group px-3 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                activePurchases.length === 0
+                  ? "bg-gray-100 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-dashed border-gray-300 dark:border-gray-600 opacity-60"
+                  : activeTab === "history"
+                    ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg hover:scale-[1.02]"
+                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-gray-600 shadow-sm border border-purple-200 dark:border-gray-600 hover:scale-[1.02]"
+              }`}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <div className="relative">
+                  <svg className={`w-5 h-5 ${activePurchases.length === 0 ? "text-gray-400" : activeTab === "history" ? "text-white" : "text-purple-600 dark:text-purple-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {activePurchases.length > 0 && (
+                    <span className="absolute -top-2 -right-3 bg-blue-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                      {activePurchases.length > 99 ? "99+" : activePurchases.length}
+                    </span>
+                  )}
                 </div>
+                <span className="text-sm font-bold leading-tight">History</span>
+                <span className={`text-[10px] leading-tight ${activePurchases.length === 0 ? "text-gray-400" : activeTab === "history" ? "text-purple-100" : "text-gray-400 dark:text-gray-500"}`}>
+                  {activePurchases.length > 0 ? `${activePurchases.length} purchases` : "No purchases"}
+                </span>
               </div>
-            </div>
-          </button>
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <div className="flex-1 h-px bg-purple-200/60 dark:bg-gray-600/60" />
+            <span className="text-[10px] font-semibold text-purple-400 dark:text-gray-500 uppercase tracking-wider">Analytics</span>
+            <div className="flex-1 h-px bg-purple-200/60 dark:bg-gray-600/60" />
+          </div>
+
+          {/* Row 2: Analytics & Community */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => setActiveTab("performance")}
+              className={`group px-3 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-[1.02] ${
+                activeTab === "performance"
+                  ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg"
+                  : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-600 shadow-sm border border-emerald-200 dark:border-gray-600"
+              }`}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <svg className={`w-5 h-5 ${activeTab === "performance" ? "text-white" : "text-emerald-600 dark:text-emerald-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span className="text-sm font-bold leading-tight">Performance</span>
+                <span className={`text-[10px] leading-tight ${activeTab === "performance" ? "text-emerald-100" : "text-gray-400 dark:text-gray-500"}`}>Your ROI</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("hallOfFame")}
+              className={`group px-3 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-[1.02] ${
+                activeTab === "hallOfFame"
+                  ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-lg"
+                  : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-yellow-50 dark:hover:bg-gray-600 shadow-sm border border-yellow-200 dark:border-gray-600"
+              }`}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <svg className={`w-5 h-5 ${activeTab === "hallOfFame" ? "text-white" : "text-yellow-600 dark:text-yellow-500"}`} fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                <span className="text-sm font-bold leading-tight">Hall of Fame</span>
+                <span className={`text-[10px] leading-tight ${activeTab === "hallOfFame" ? "text-yellow-100" : "text-gray-400 dark:text-gray-500"}`}>Top 50</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("liveFeed")}
+              className={`group px-3 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-[1.02] ${
+                activeTab === "liveFeed"
+                  ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg"
+                  : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-green-50 dark:hover:bg-gray-600 shadow-sm border border-green-200 dark:border-gray-600"
+              }`}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <div className="relative">
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center ${activeTab === "liveFeed" ? "bg-white/20" : "bg-green-100 dark:bg-green-900/30"}`}>
+                    <span className={`w-2.5 h-2.5 rounded-full block animate-pulse ${activeTab === "liveFeed" ? "bg-white" : "bg-green-500"}`} />
+                  </span>
+                </div>
+                <span className="text-sm font-bold leading-tight">Live Feed</span>
+                <span className={`text-[10px] leading-tight ${activeTab === "liveFeed" ? "text-green-100" : "text-gray-400 dark:text-gray-500"}`}>All trades</span>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1238,12 +1336,12 @@ export default function App() {
             {dcaSessions.length > 0 ? (
               <div className="space-y-6">
                 {}
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Active Strategies</h2>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Active Strategies</h2>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">{dcaSessions.length} active DCA {dcaSessions.length === 1 ? 'position' : 'positions'}</p>
                   </div>
-                  <div className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 px-6 py-3 rounded-full flex items-center gap-2">
+                  <div className="hidden sm:flex bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 px-6 py-3 rounded-full items-center gap-2">
                     <div className="w-2 h-2 bg-purple-600 dark:bg-purple-400 rounded-full animate-pulse"></div>
                     <span className="text-purple-700 dark:text-purple-300 font-semibold">Auto-investing</span>
                   </div>
@@ -1461,7 +1559,7 @@ export default function App() {
                 
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Purchase History</h2>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Purchase History</h2>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">{activePurchases.length} automated {activePurchases.length === 1 ? 'purchase' : 'purchases'}</p>
                   </div>
                 </div>
@@ -1473,34 +1571,23 @@ export default function App() {
                       key={i}
                       className="bg-gradient-to-br from-white to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl border-2 border-purple-200 dark:border-gray-600 p-6 shadow-lg dark:shadow-gray-900/50 hover:shadow-xl transition-all duration-200 hover:scale-[1.01]"
                     >
-                      <div className="flex items-start justify-between mb-4">
-                        
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="flex flex-col items-center">
-                            <div className="bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 rounded-xl px-4 py-3 min-w-[120px]">
-                              <p className="text-xs text-red-600 dark:text-red-400 font-semibold mb-1">Spent</p>
-                              <p className="text-lg font-bold text-red-700 dark:text-red-300">{formatNumber(parseFloat(amountIn))}</p>
-                              <p className="text-xs text-red-600 dark:text-red-400 font-medium mt-1">{sourceToken}</p>
-                            </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 rounded-xl px-3 py-2.5 min-w-[100px]">
+                            <p className="text-xs text-red-600 dark:text-red-400 font-semibold mb-0.5">Spent</p>
+                            <p className="text-base font-bold text-red-700 dark:text-red-300">{formatNumber(parseFloat(amountIn))}</p>
+                            <p className="text-xs text-red-600 dark:text-red-400 font-medium">{sourceToken}</p>
                           </div>
-
-                          <div className="flex flex-col items-center">
-                            <svg className="w-8 h-8 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                            </svg>
-                          </div>
-
-                          <div className="flex flex-col items-center">
-                            <div className="bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-xl px-4 py-3 min-w-[120px]">
-                              <p className="text-xs text-green-600 dark:text-green-400 font-semibold mb-1">Received</p>
-                              <p className="text-lg font-bold text-green-700 dark:text-green-300">{formatNumber(parseFloat(amountOut))}</p>
-                              <p className="text-xs text-green-600 dark:text-green-400 font-medium mt-1">{destinationToken}</p>
-                            </div>
+                          <svg className="w-6 h-6 text-purple-600 dark:text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                          </svg>
+                          <div className="bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-xl px-3 py-2.5 min-w-[100px]">
+                            <p className="text-xs text-green-600 dark:text-green-400 font-semibold mb-0.5">Received</p>
+                            <p className="text-base font-bold text-green-700 dark:text-green-300">{formatNumber(parseFloat(amountOut))}</p>
+                            <p className="text-xs text-green-600 dark:text-green-400 font-medium">{destinationToken}</p>
                           </div>
                         </div>
-
-                        
-                        <div className="bg-purple-100 dark:bg-purple-900/30 px-3 py-1 rounded-full">
+                        <div className="bg-purple-100 dark:bg-purple-900/30 px-3 py-1 rounded-full self-start sm:self-auto">
                           <p className="text-xs text-purple-700 dark:text-purple-300 font-semibold">
                             {new Date(datetime).toLocaleDateString()}
                           </p>
@@ -1620,6 +1707,12 @@ export default function App() {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === "liveFeed" && (
+          <Suspense fallback={<div className="flex justify-center items-center py-20"><FaSpinner className="text-4xl text-green-500 animate-spin" /></div>}>
+            <LiveFeedPage />
+          </Suspense>
         )}
       </div>
     </div>

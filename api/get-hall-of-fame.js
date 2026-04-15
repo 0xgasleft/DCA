@@ -65,12 +65,14 @@ function calculateScore(userData, ethPrice) {
     if (token.symbol === 'USDT' || token.symbol === 'USDC' || token.symbol === 'DAI' ||
         token.symbol === 'USDT0' || token.symbol.includes('USD')) {
       totalUsdVolume += tokenVolume;
-    }
-    else if (token.symbol === 'ETH' || token.symbol === 'WETH') {
-      totalUsdVolume += tokenVolume * ethPrice;
-    }
-    else {
-      throw new Error(`Unsupported token for volume calculation: ${token.symbol}`);
+    } else if (token.symbol === 'ETH' || token.symbol === 'WETH') {
+      // If ethPrice is unavailable, skip ETH volume contribution rather than NaN-poisoning all scores
+      if (ethPrice != null && isFinite(ethPrice)) {
+        totalUsdVolume += tokenVolume * ethPrice;
+      }
+    } else {
+      // Unknown token: skip gracefully so a new listing doesn't crash the entire leaderboard
+      console.warn(`[Hall of Fame] Skipping unsupported token for volume calc: ${token.symbol}`);
     }
   }
 
@@ -152,17 +154,15 @@ function getTierInfo(score) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
-  res.setHeader("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
 
   if (req.method === "OPTIONS") {
     res.status(200).end();
     return;
   }
 
-  if (req.method !== "POST" && req.method !== "GET") {
+  if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
@@ -308,17 +308,20 @@ export default async function handler(req, res) {
 
     rankings.sort((a, b) => b.score - a.score);
 
-    rankings.forEach((user, index) => {
+    const totalUsers = rankings.length;
+    const top50 = rankings.slice(0, 50);
+    top50.forEach((user, index) => {
       user.rank = index + 1;
     });
 
-    console.log(`Hall of Fame calculated for ${rankings.length} users`);
+    console.log(`Hall of Fame calculated for ${totalUsers} users, returning top ${top50.length}`);
 
     return res.status(200).json({
       success: true,
-      rankings,
+      rankings: top50,
       metadata: {
-        totalUsers: rankings.length,
+        totalUsers,
+        topShown: top50.length,
         ethPrice,
         lastUpdated: new Date().toISOString()
       }
