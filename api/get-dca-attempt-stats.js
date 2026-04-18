@@ -63,52 +63,29 @@ export default async function handler(req, res) {
     const retriedSuccess = retriedAttempts.filter(a => a.success).length;
     const retriedFailed = retriedAttempts.filter(a => !a.success).length;
 
-    
-    const byBuyerToken = {};
+    // Failure rate per source→destination pair (raw addresses; frontend resolves symbols via symbolMap)
+    const byPair = {};
     attempts.forEach(attempt => {
-      const key = `${attempt.buyer_address}:${attempt.destination_token}`;
-      if (!byBuyerToken[key]) {
-        byBuyerToken[key] = {
-          buyer: attempt.buyer_address,
+      const key = `${attempt.source_token}|${attempt.destination_token}`;
+      if (!byPair[key]) {
+        byPair[key] = {
           sourceToken: attempt.source_token,
           destinationToken: attempt.destination_token,
           totalAttempts: 0,
           successful: 0,
           failed: 0,
-          successRate: 0,
-          lastAttempt: attempt.attempt_timestamp,
-          avgPriceImpact: null
+          failureRate: 0
         };
       }
-      byBuyerToken[key].totalAttempts++;
-      if (attempt.success) {
-        byBuyerToken[key].successful++;
-      } else {
-        byBuyerToken[key].failed++;
-      }
+      byPair[key].totalAttempts++;
+      if (attempt.success) byPair[key].successful++;
+      else byPair[key].failed++;
     });
 
-    
-    const buyerTokenStats = Object.values(byBuyerToken).map(stat => {
-      stat.successRate = stat.totalAttempts > 0
-        ? ((stat.successful / stat.totalAttempts) * 100).toFixed(2)
-        : 0;
-
-      
-      const successfulWithImpact = attempts.filter(a =>
-        a.buyer_address === stat.buyer &&
-        a.destination_token === stat.destinationToken &&
-        a.success &&
-        a.price_impact !== null
-      );
-
-      if (successfulWithImpact.length > 0) {
-        const totalImpact = successfulWithImpact.reduce((sum, a) => sum + parseFloat(a.price_impact), 0);
-        stat.avgPriceImpact = (totalImpact / successfulWithImpact.length).toFixed(4);
-      }
-
-      return stat;
-    }).sort((a, b) => b.totalAttempts - a.totalAttempts);
+    const pairFailureRates = Object.values(byPair).map(p => ({
+      ...p,
+      failureRate: p.totalAttempts > 0 ? +((p.failed / p.totalAttempts) * 100).toFixed(1) : 0
+    })).sort((a, b) => b.failed - a.failed);
 
     
     const dailyStats = {};
@@ -160,14 +137,6 @@ export default async function handler(req, res) {
       lastOccurrence: stat.lastOccurrence
     })).sort((a, b) => b.count - a.count).slice(0, 10);
 
-    
-    const routerStats = {};
-    attempts.filter(a => a.success && a.router_used).forEach(attempt => {
-      const router = attempt.router_used;
-      routerStats[router] = (routerStats[router] || 0) + 1;
-    });
-
-    
     return res.status(200).json({
       success: true,
       data: {
@@ -184,10 +153,9 @@ export default async function handler(req, res) {
             : 0,
           daysAnalyzed: daysBack
         },
-        buyerTokenStats,
+        pairFailureRates,
         dailyTimeline,
         topErrors,
-        routerStats,
         recentAttempts: attempts.slice(0, 50).map(a => ({
           buyer: a.buyer_address,
           sourceToken: a.source_token,
@@ -197,8 +165,7 @@ export default async function handler(req, res) {
           timestamp: a.attempt_timestamp,
           retryCount: a.retry_count,
           txHash: a.transaction_hash,
-          priceImpact: a.price_impact,
-          router: a.router_used
+          priceImpact: a.price_impact
         }))
       }
     });
