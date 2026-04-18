@@ -265,12 +265,19 @@ export default function DCAConfigPage({
                     </div>
 
                     {}
-                    <div className="bg-gradient-to-br from-white to-purple-50 dark:from-gray-700 dark:to-purple-900/30 rounded-lg p-2.5 border border-purple-200 dark:border-purple-800">
+                    <div className={`bg-gradient-to-br rounded-lg p-2.5 border ${
+                      priceImpactData.slippageBps >= 1000
+                        ? 'from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border-orange-300 dark:border-orange-700'
+                        : 'from-white to-purple-50 dark:from-gray-700 dark:to-purple-900/30 border-purple-200 dark:border-purple-800'
+                    }`}>
                       <div className="flex items-center gap-1.5 mb-1.5">
-                        <svg className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className={`w-3.5 h-3.5 ${priceImpactData.slippageBps >= 1000 ? 'text-orange-500' : 'text-purple-600 dark:text-purple-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                         </svg>
                         <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Slippage</span>
+                        {priceImpactData.slippageBps >= 1000 && (
+                          <span className="text-xs px-1.5 py-0.5 rounded font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">Capped</span>
+                        )}
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-base font-bold text-gray-700 dark:text-gray-200">
@@ -286,6 +293,11 @@ export default function DCAConfigPage({
                            Math.abs(priceImpactData.priceImpact) < 3 ? 'Medium' : 'High'}
                         </span>
                       </div>
+                      {priceImpactData.slippageBps >= 1000 && (
+                        <p className="mt-1.5 text-xs text-orange-700 dark:text-orange-300 leading-snug">
+                          Slippage is capped at 10%. This pair has low liquidity - your actual fill price may be up to 10% worse than the quote. If the price moves beyond that at execution time, the trade will revert rather than fill at a worse rate.
+                        </p>
+                      )}
                     </div>
                   </div>
 

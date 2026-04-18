@@ -12,6 +12,27 @@ function formatTokenAmount(value) {
   return num.toFixed(Math.min(places, 18)).replace(/0+$/, '').replace(/\.$/, '') || '0';
 }
 
+function formatUsd(num) {
+  if (num == null || !isFinite(num)) return "-";
+  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(2)}M`;
+  if (num >= 1_000) return `$${(num / 1_000).toFixed(1)}k`;
+  return `$${num.toFixed(2)}`;
+}
+
+function timeAgo(unixSeconds) {
+  if (!unixSeconds) return "never";
+  const diff = Math.floor(Date.now() / 1000) - unixSeconds;
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function shortAddress(addr) {
+  if (!addr) return "";
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
 export default function VisualizerPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
@@ -219,7 +240,19 @@ export default function VisualizerPage() {
     );
   }
 
-  const { overview, sourceTokenVolumes, destinationTokenVolumes, dailyActivity, tokenPairs, metadata } = data;
+  const {
+    overview, sourceTokenVolumes, destinationTokenVolumes, dailyActivity, tokenPairs, metadata,
+    activeSessionsByToken = [], buyTimeHistogram = [], slippageStats, priceImpactStats, symbolMap = {}
+  } = data;
+
+  const cronStaleSeconds = overview.lastExecutionTimestamp
+    ? Math.floor(Date.now() / 1000) - overview.lastExecutionTimestamp
+    : null;
+  const cronHealthy = cronStaleSeconds !== null && cronStaleSeconds < 3600;
+  const cronWarn = cronStaleSeconds !== null && cronStaleSeconds < 6 * 3600;
+
+  const maxBuyTime = Math.max(1, ...buyTimeHistogram.map(h => h.count));
+  const resolveSymbol = (addr) => symbolMap[(addr || '').toLowerCase()] || shortAddress(addr);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -411,9 +444,9 @@ export default function VisualizerPage() {
           </div>
 
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white">
-            <p className="text-sm opacity-90 mb-2">Completion Rate</p>
-            <p className="text-3xl font-bold">{overview.completionRate}%</p>
-            <p className="text-xs opacity-75 mt-1">Sessions not cancelled</p>
+            <p className="text-sm opacity-90 mb-2">Cancellation Rate</p>
+            <p className="text-3xl font-bold">{overview.cancellationRate ?? 0}%</p>
+            <p className="text-xs opacity-75 mt-1">Of all registered sessions</p>
           </div>
 
           <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
@@ -423,46 +456,59 @@ export default function VisualizerPage() {
           </div>
         </div>
 
-        {}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="bg-gradient-to-br from-green-500 to-green-600 p-2 rounded-lg">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">DCA Contract Token Balances</h2>
+        {/* Operational health row: cron freshness, ETH runway, USD volume */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className={`rounded-2xl shadow-lg p-6 border-l-4 ${cronHealthy ? 'bg-green-50 border-green-500' : cronWarn ? 'bg-yellow-50 border-yellow-500' : 'bg-red-50 border-red-500'}`}>
+            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Cron Health</p>
+            <p className={`text-2xl font-bold ${cronHealthy ? 'text-green-900' : cronWarn ? 'text-yellow-900' : 'text-red-900'}`}>
+              {timeAgo(overview.lastExecutionTimestamp)}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Last successful execution · {overview.avgExecutionsPerDay} buys/day (7d avg)
+            </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {sourceTokenVolumes.map((token, index) => (
-              <div key={index} className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200 hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">{token.symbol.charAt(0)}</span>
-                    </div>
-                    <span className="font-bold text-gray-900">{token.symbol}</span>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <p className="text-2xl font-bold text-green-700">
-                    {formatTokenAmount(token.contractBalance || '0', token.decimals)}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1 font-mono">
-                    {token.address.slice(0, 6)}...{token.address.slice(-4)}
-                  </p>
-                </div>
-              </div>
-            ))}
+
+          <div className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-amber-500">
+            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">ETH Runway</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {overview.ethRunwayDays != null ? `${overview.ethRunwayDays} days` : '-'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              At {metadata.avgGasPerExecEth} ETH/exec · {parseFloat(metadata.ownerBalance).toFixed(6)} ETH owner balance
+            </p>
           </div>
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-800">
-              <span className="font-semibold">Note:</span> These balances represent tokens currently held in the DCA contract for upcoming purchases.
+
+          <div className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-emerald-500">
+            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Total Volume (USD)</p>
+            <p className="text-3xl font-bold text-gray-900">{formatUsd(overview.totalUsdVolume)}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Lifetime · stables 1:1, ETH @ ${metadata.ethPrice ?? '-'}
             </p>
           </div>
         </div>
 
-        {}
+        {/* Active sessions broken down by destination token */}
+        {activeSessionsByToken.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-pink-100 p-2 rounded-lg">
+                <svg className="w-5 h-5 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Active Sessions by Token</h3>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {activeSessionsByToken.map((s, i) => (
+                <div key={i} className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl p-3 border border-pink-200 text-center">
+                  <p className="text-xs font-semibold text-pink-700 uppercase tracking-wide">{s.symbol}</p>
+                  <p className="text-2xl font-bold text-pink-900">{s.count}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {attemptStats && (
           <div className="mb-8">
             <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
@@ -552,101 +598,42 @@ export default function VisualizerPage() {
                 </div>
               )}
 
-              {}
-              {attemptStats.routerStats && Object.keys(attemptStats.routerStats).length > 0 && (
+              {/* Per-pair failure rate — surfaces routing problems (e.g. the USDT0→ANITA NO_SWAP_ROUTES_FOUND issue) */}
+              {attemptStats.pairFailureRates && attemptStats.pairFailureRates.length > 0 && (
                 <div className="bg-white rounded-2xl shadow-lg p-6">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-blue-100 p-2 rounded-lg">
-                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    <div className="bg-orange-100 p-2 rounded-lg">
+                      <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900">Router Usage</h3>
+                    <h3 className="text-lg font-bold text-gray-900">Failure Rate by Pair</h3>
                   </div>
-                  <div className="space-y-3">
-                    {Object.entries(attemptStats.routerStats)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([router, count], index) => {
-                        const total = Object.values(attemptStats.routerStats).reduce((sum, c) => sum + c, 0);
-                        const percentage = ((count / total) * 100).toFixed(1);
-                        return (
-                          <div key={index}>
-                            <div className="flex items-center justify-between mb-1">
-                              <p className="text-sm font-semibold text-gray-900">{router}</p>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-gray-900">{count}</span>
-                                <span className="text-xs text-gray-500">({percentage}%)</span>
-                              </div>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div
-                                className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full"
-                                style={{ width: `${percentage}%` }}
-                              ></div>
-                            </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {attemptStats.pairFailureRates.slice(0, 8).map((p, i) => {
+                      const sym = (a) => resolveSymbol(a);
+                      const tone = p.failureRate >= 20 ? 'red' : p.failureRate >= 5 ? 'yellow' : 'green';
+                      const toneClass = tone === 'red' ? 'bg-red-100 text-red-800' : tone === 'yellow' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800';
+                      const barClass = tone === 'red' ? 'from-red-500 to-red-600' : tone === 'yellow' ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600';
+                      return (
+                        <div key={i} className="p-2 bg-gray-50 rounded-lg">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-sm font-semibold text-gray-900">{sym(p.sourceToken)} → {sym(p.destinationToken)}</p>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${toneClass}`}>{p.failureRate}% fail</span>
                           </div>
-                        );
-                      })}
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                              <div className={`bg-gradient-to-r ${barClass} h-2 rounded-full`} style={{ width: `${p.failureRate}%` }} />
+                            </div>
+                            <span className="text-xs text-gray-500 w-24 text-right">{p.failed}/{p.totalAttempts} failed</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
             </div>
-
-            {}
-            {attemptStats.buyerTokenStats && attemptStats.buyerTokenStats.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-lg p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-purple-100 p-2 rounded-lg">
-                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900">Success Rates by Address & Token</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Buyer</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Token</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Attempts</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Success</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Failed</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Rate</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Avg Impact</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {attemptStats.buyerTokenStats.slice(0, 20).map((stat, index) => (
-                        <tr key={index} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 font-mono text-xs text-gray-700">
-                            {stat.buyer.slice(0, 6)}...{stat.buyer.slice(-4)}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs text-gray-700">
-                            {stat.destinationToken.slice(0, 6)}...{stat.destinationToken.slice(-4)}
-                          </td>
-                          <td className="px-4 py-3 text-center font-medium text-gray-900">{stat.totalAttempts}</td>
-                          <td className="px-4 py-3 text-center text-green-600 font-medium">{stat.successful}</td>
-                          <td className="px-4 py-3 text-center text-red-600 font-medium">{stat.failed}</td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                              parseFloat(stat.successRate) >= 95 ? 'bg-green-100 text-green-800' :
-                              parseFloat(stat.successRate) >= 80 ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-red-100 text-red-800'
-                            }`}>
-                              {stat.successRate}%
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center text-xs font-medium text-gray-700">
-                            {stat.avgPriceImpact ? `${stat.avgPriceImpact}%` : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -745,6 +732,75 @@ export default function VisualizerPage() {
             </div>
           </div>
         </div>
+
+        {/* Slippage + price impact distributions from price_impact_cache (last 30d) */}
+        {(slippageStats || priceImpactStats) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {slippageStats && (
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-cyan-100 p-2 rounded-lg">
+                    <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Slippage Applied (last 30d)</h3>
+                </div>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="text-center"><p className="text-xs text-gray-500 uppercase">Mean</p><p className="text-2xl font-bold text-cyan-700">{slippageStats.mean}%</p></div>
+                  <div className="text-center"><p className="text-xs text-gray-500 uppercase">p50</p><p className="text-2xl font-bold text-cyan-700">{slippageStats.p50}%</p></div>
+                  <div className="text-center"><p className="text-xs text-gray-500 uppercase">p95</p><p className="text-2xl font-bold text-cyan-700">{slippageStats.p95}%</p></div>
+                  <div className="text-center"><p className="text-xs text-gray-500 uppercase">Max</p><p className="text-2xl font-bold text-cyan-700">{slippageStats.max}%</p></div>
+                </div>
+                <p className="text-xs text-gray-500 mt-3 text-center">Across {slippageStats.count} executions · range {slippageStats.min}% – {slippageStats.max}%</p>
+              </div>
+            )}
+
+            {priceImpactStats && (
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-violet-100 p-2 rounded-lg">
+                    <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Price Impact (last 30d)</h3>
+                </div>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="text-center"><p className="text-xs text-gray-500 uppercase">Mean</p><p className="text-2xl font-bold text-violet-700">{priceImpactStats.mean}%</p></div>
+                  <div className="text-center"><p className="text-xs text-gray-500 uppercase">p50</p><p className="text-2xl font-bold text-violet-700">{priceImpactStats.p50}%</p></div>
+                  <div className="text-center"><p className="text-xs text-gray-500 uppercase">p95</p><p className="text-2xl font-bold text-violet-700">{priceImpactStats.p95}%</p></div>
+                  <div className="text-center"><p className="text-xs text-gray-500 uppercase">Worst</p><p className="text-2xl font-bold text-violet-700">{priceImpactStats.min}%</p></div>
+                </div>
+                <p className="text-xs text-gray-500 mt-3 text-center">Negative = unfavorable. Across {priceImpactStats.count} executions.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Buy-time histogram: when users schedule their DCAs (UTC hour) */}
+        {buyTimeHistogram.some(h => h.count > 0) && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-teal-100 p-2 rounded-lg">
+                <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Scheduled Buy Times (UTC)</h3>
+            </div>
+            <div className="flex items-end gap-1 h-32">
+              {buyTimeHistogram.map((h) => (
+                <div key={h.hour} className="flex-1 flex flex-col items-center group" title={`${String(h.hour).padStart(2, '0')}:00 - ${h.count} session${h.count !== 1 ? 's' : ''}`}>
+                  <div className="w-full bg-gradient-to-t from-teal-600 to-teal-400 rounded-t transition-all hover:from-teal-700 hover:to-teal-500" style={{ height: `${(h.count / maxBuyTime) * 100}%`, minHeight: h.count > 0 ? '2px' : '0' }} />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between mt-2 text-xs text-gray-400 font-mono">
+              {[0, 6, 12, 18, 23].map(h => <span key={h}>{String(h).padStart(2, '0')}:00</span>)}
+            </div>
+          </div>
+        )}
 
         {}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
