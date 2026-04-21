@@ -23,6 +23,27 @@ const ERC20_ABI = [
 const tokenInfoCache = new Map();
 const blockTimestampCache = new Map();
 
+// Conservative average gas cost per DCA execution on Ink (in ETH).
+// Used for runway estimate; tweak via env if real metering data becomes available.
+const AVG_GAS_PER_EXEC_ETH = parseFloat(process.env.AVG_GAS_PER_EXEC_ETH || "0.00005");
+
+async function getEthPrice() {
+  try {
+    const response = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+    const data = await response.json();
+    return data.ethereum?.usd ?? null;
+  } catch (error) {
+    console.error("Failed to fetch ETH price:", error.message);
+    return null;
+  }
+}
+
+function percentile(sortedAsc, p) {
+  if (sortedAsc.length === 0) return null;
+  const idx = Math.min(sortedAsc.length - 1, Math.floor((p / 100) * sortedAsc.length));
+  return sortedAsc[idx];
+}
+
 async function getTokenInfo(tokenAddress, provider) {
   const normalizedAddress = tokenAddress.toLowerCase();
 
@@ -184,11 +205,13 @@ export default async function handler(req, res) {
       }
     }, 20);
 
-    
+
     let totalActiveSessions = 0;
+    const activeSessionsByTokenMap = new Map(); // destToken (lower) -> count
     liveActiveSessions.forEach((tokenSet, buyer) => {
       console.log(`  Buyer ${buyer}: ${tokenSet.size} active session(s) - tokens: ${Array.from(tokenSet).join(', ')}`);
       totalActiveSessions += tokenSet.size;
+      tokenSet.forEach(t => activeSessionsByTokenMap.set(t, (activeSessionsByTokenMap.get(t) || 0) + 1));
     });
 
     console.log(`Live active sessions: ${totalActiveSessions}`);
@@ -203,6 +226,8 @@ export default async function handler(req, res) {
     let totalPurchasesExecuted = purchaseEvents.length;
     const dailyActivity = new Map();
     const tokenPairs = new Map();
+    const buyTimeHistogram = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
+    let lastExecutionTimestamp = null;
 
     // Timestamps are now stored in cache by sync-visualization - no RPC needed here
     // Pre-fetch only token infos (just 4 unique tokens)
@@ -251,6 +276,11 @@ export default async function handler(req, res) {
       const destInfo = await getTokenInfo(destinationToken, provider);
       const pairKey = `${sourceInfo.symbol} → ${destInfo.symbol}`;
       tokenPairs.set(pairKey, (tokenPairs.get(pairKey) || 0) + 1);
+
+      // Bucket scheduled buy time. On-chain buyTime is HHMM as integer (e.g. 930 = 09:30 UTC).
+      const buyTime = Number(event.args.buyTime || 0);
+      const hour = Math.floor(buyTime / 100);
+      if (hour >= 0 && hour < 24) buyTimeHistogram[hour].count += 1;
     }
 
     for (const event of purchaseEvents) {
@@ -282,6 +312,10 @@ export default async function handler(req, res) {
         dailyActivity.set(date, { registrations: 0, purchases: 0 });
       }
       dailyActivity.get(date).purchases += 1;
+
+      if (timestamp && (lastExecutionTimestamp === null || timestamp > lastExecutionTimestamp)) {
+        lastExecutionTimestamp = timestamp;
+      }
     }
 
     
@@ -360,21 +394,107 @@ export default async function handler(req, res) {
       ownerAddress = "Unknown";
     }
 
+    // ---- Derived analytics ----
+
+    // Build address→symbol map so frontend can resolve raw addresses (used by attempt-stats panels)
+    const symbolMap = {};
+    for (const t of [...sourceTokenVolumes, ...destinationTokenVolumes]) {
+      symbolMap[t.address.toLowerCase()] = t.symbol;
+    }
+
+    // Active sessions broken down by destination token
+    const activeSessionsByToken = Array.from(activeSessionsByTokenMap.entries())
+      .map(([address, count]) => ({ address, symbol: symbolMap[address] || 'UNKNOWN', count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Total USD volume of source tokens spent (stables 1:1, ETH at live price, others skipped)
+    const ethPrice = await getEthPrice();
+    let totalUsdVolume = 0;
+    for (const t of sourceTokenVolumes) {
+      const v = parseFloat(t.totalVolume);
+      if (!isFinite(v) || v === 0) continue;
+      const sym = (t.symbol || '').toUpperCase();
+      if (sym.includes('USD') || sym === 'DAI') {
+        totalUsdVolume += v;
+      } else if (sym === 'ETH' || sym === 'WETH') {
+        if (ethPrice != null) totalUsdVolume += v * ethPrice;
+      }
+    }
+    totalUsdVolume = Math.round(totalUsdVolume * 100) / 100;
+
+    // Execution rate over the last 7 days, used for runway estimate
+    const now = Math.floor(Date.now() / 1000);
+    const sevenDaysAgo = now - 7 * 86400;
+    const recentPurchases = purchaseEvents.filter(e => e.blockTimestamp && e.blockTimestamp >= sevenDaysAgo);
+    const avgExecutionsPerDay = recentPurchases.length / 7;
+    const ownerBalanceNum = parseFloat(ownerBalance) || 0;
+    const dailyEthBurn = avgExecutionsPerDay * AVG_GAS_PER_EXEC_ETH;
+    const ethRunwayDays = dailyEthBurn > 0 ? Math.floor(ownerBalanceNum / dailyEthBurn) : null;
+
+    // Slippage + price impact distributions from the last 30 days of executions
+    const thirtyDaysAgoIso = new Date(Date.now() - 30 * 86400 * 1000).toISOString();
+    let slippageStats = null, priceImpactStats = null;
+    try {
+      const { data: impactRows } = await supabase
+        .from('price_impact_cache')
+        .select('price_impact,slippage_percent,timestamp')
+        .gte('created_at', thirtyDaysAgoIso);
+
+      if (impactRows && impactRows.length > 0) {
+        const slipVals = impactRows.map(r => parseFloat(r.slippage_percent)).filter(v => isFinite(v)).sort((a, b) => a - b);
+        const impactVals = impactRows.map(r => parseFloat(r.price_impact)).filter(v => isFinite(v)).sort((a, b) => a - b);
+
+        if (slipVals.length > 0) {
+          const sum = slipVals.reduce((s, v) => s + v, 0);
+          slippageStats = {
+            count: slipVals.length,
+            mean: +(sum / slipVals.length).toFixed(3),
+            p50: +percentile(slipVals, 50).toFixed(3),
+            p95: +percentile(slipVals, 95).toFixed(3),
+            min: +slipVals[0].toFixed(3),
+            max: +slipVals[slipVals.length - 1].toFixed(3)
+          };
+        }
+        if (impactVals.length > 0) {
+          const sum = impactVals.reduce((s, v) => s + v, 0);
+          priceImpactStats = {
+            count: impactVals.length,
+            mean: +(sum / impactVals.length).toFixed(4),
+            p50: +percentile(impactVals, 50).toFixed(4),
+            p95: +percentile(impactVals, 95).toFixed(4),
+            min: +impactVals[0].toFixed(4),
+            max: +impactVals[impactVals.length - 1].toFixed(4)
+          };
+        }
+      }
+    } catch (err) {
+      console.error('Failed to compute slippage/impact stats:', err.message);
+    }
+
     const visualizationData = {
       overview: {
-        uniqueWallets: uniqueLifetimeWallets.size, 
-        activeWallets: uniqueActiveWallets.size, 
+        uniqueWallets: uniqueLifetimeWallets.size,
+        activeWallets: uniqueActiveWallets.size,
         totalRegistrations,
         totalPurchasesExecuted,
-        totalActiveSessions, 
+        totalActiveSessions,
         totalCancelledSessions: destroyEvents.length,
         totalTokenPairs: tokenPairsArray.length,
-        completionRate: totalRegistrations > 0
-          ? (((totalRegistrations - destroyEvents.length) / totalRegistrations) * 100).toFixed(1)
-          : 0
+        cancellationRate: totalRegistrations > 0
+          ? +((destroyEvents.length / totalRegistrations) * 100).toFixed(1)
+          : 0,
+        totalUsdVolume,
+        avgExecutionsPerDay: +avgExecutionsPerDay.toFixed(2),
+        lastExecutionTimestamp,
+        ethRunwayDays
       },
       sourceTokenVolumes,
       destinationTokenVolumes,
+      activeSessionsByToken,
+      buyTimeHistogram,
+      slippageStats,
+      priceImpactStats,
+      symbolMap,
       dailyActivity: dailyActivityArray,
       tokenPairs: tokenPairsArray,
       metadata: {
@@ -384,6 +504,8 @@ export default async function handler(req, res) {
         contractAddress: CONTRACT_ADDRESS,
         ownerAddress,
         ownerBalance,
+        ethPrice,
+        avgGasPerExecEth: AVG_GAS_PER_EXEC_ETH,
         needsSync: lastSyncedBlock < currentBlock,
         blocksBehind: Math.max(0, currentBlock - lastSyncedBlock)
       }
