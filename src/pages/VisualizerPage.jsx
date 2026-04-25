@@ -253,6 +253,8 @@ export default function VisualizerPage() {
   const cronWarn = cronStaleSeconds !== null && cronStaleSeconds < 6 * 3600;
 
   const maxBuyTime = Math.max(1, ...buyTimeHistogram.map(h => h.count));
+  const totalScheduled = buyTimeHistogram.reduce((s, h) => s + h.count, 0);
+  const activeHours = buyTimeHistogram.filter(h => h.count > 0).length;
   const resolveSymbol = (addr) => symbolMap[(addr || '').toLowerCase()] || shortAddress(addr);
 
   return (
@@ -832,28 +834,57 @@ export default function VisualizerPage() {
         )}
 
         {/* Buy-time histogram: when users schedule their DCAs (UTC hour) */}
-        {buyTimeHistogram.some(h => h.count > 0) && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
-            <div className="flex items-center gap-3 mb-4">
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
               <div className="bg-teal-100 p-2 rounded-lg">
                 <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-gray-900">Scheduled Buy Times (UTC)</h3>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Scheduled Buy Times (UTC)</h3>
+                <p className="text-xs text-gray-500">Active sessions grouped by hour-of-day</p>
+              </div>
             </div>
-            <div className="flex items-end gap-1 h-32">
-              {buyTimeHistogram.map((h) => (
-                <div key={h.hour} className="flex-1 flex flex-col items-center group" title={`${String(h.hour).padStart(2, '0')}:00 - ${h.count} session${h.count !== 1 ? 's' : ''}`}>
-                  <div className="w-full bg-gradient-to-t from-teal-600 to-teal-400 rounded-t transition-all hover:from-teal-700 hover:to-teal-500" style={{ height: `${(h.count / maxBuyTime) * 100}%`, minHeight: h.count > 0 ? '2px' : '0' }} />
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between mt-2 text-xs text-gray-400 font-mono">
-              {[0, 6, 12, 18, 23].map(h => <span key={h}>{String(h).padStart(2, '0')}:00</span>)}
+            <div className="text-right">
+              <p className="text-2xl font-bold text-teal-700">{totalScheduled}</p>
+              <p className="text-xs text-gray-500">sessions across {activeHours} hour{activeHours !== 1 ? 's' : ''}</p>
             </div>
           </div>
-        )}
+
+          {totalScheduled === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              No active sessions scheduled. The chart populates from on-chain <code className="font-mono text-xs">getDCAConfig().buy_time</code> for sessions with days_left &gt; 0.
+            </div>
+          ) : (
+            <>
+              <div className="flex items-end gap-1 h-40 border-b border-gray-200">
+                {buyTimeHistogram.map((h) => {
+                  const heightPct = (h.count / maxBuyTime) * 100;
+                  return (
+                    <div key={h.hour} className="flex-1 flex flex-col items-center justify-end group relative" title={`${String(h.hour).padStart(2, '0')}:00 — ${h.count} session${h.count !== 1 ? 's' : ''}`}>
+                      {h.count > 0 && (
+                        <span className="text-[10px] font-bold text-teal-700 mb-0.5">{h.count}</span>
+                      )}
+                      <div
+                        className={`w-full rounded-t transition-all ${h.count > 0 ? 'bg-gradient-to-t from-teal-600 to-teal-400 hover:from-teal-700 hover:to-teal-500' : 'bg-gray-100'}`}
+                        style={{ height: h.count > 0 ? `${Math.max(heightPct, 4)}%` : '4%' }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-1 mt-1.5">
+                {buyTimeHistogram.map((h) => (
+                  <div key={h.hour} className={`flex-1 text-center text-[10px] font-mono ${h.count > 0 ? 'text-gray-700 font-semibold' : 'text-gray-300'}`}>
+                    {String(h.hour).padStart(2, '0')}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
         {}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
