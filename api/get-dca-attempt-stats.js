@@ -114,7 +114,15 @@ export default async function handler(req, res) {
       return day;
     }).sort((a, b) => a.date.localeCompare(b.date));
 
-    
+    // Index latest attempt outcome per (buyer, source, dest) — attempts are already sorted desc by timestamp,
+    // so the first one we see for each key IS the most recent. Used to determine if a buyer
+    // recovered (succeeded on a later attempt for the same pair) after hitting an error.
+    const latestByBuyerPair = new Map();
+    for (const a of attempts) {
+      const key = `${a.buyer_address}|${a.source_token}|${a.destination_token}`;
+      if (!latestByBuyerPair.has(key)) latestByBuyerPair.set(key, a);
+    }
+
     const errorStats = {};
     attempts.filter(a => !a.success && a.error_message).forEach(attempt => {
       const msg = attempt.error_message;
@@ -122,20 +130,48 @@ export default async function handler(req, res) {
         errorStats[msg] = {
           message: msg,
           count: 0,
-          affectedBuyers: new Set(),
+          // buyer_address|source|dest -> { buyer, sourceToken, destinationToken, firstSeen }
+          buyerPairs: new Map(),
           lastOccurrence: attempt.attempt_timestamp
         };
       }
       errorStats[msg].count++;
-      errorStats[msg].affectedBuyers.add(attempt.buyer_address);
+      const bpKey = `${attempt.buyer_address}|${attempt.source_token}|${attempt.destination_token}`;
+      if (!errorStats[msg].buyerPairs.has(bpKey)) {
+        errorStats[msg].buyerPairs.set(bpKey, {
+          buyer: attempt.buyer_address,
+          sourceToken: attempt.source_token,
+          destinationToken: attempt.destination_token,
+          firstSeen: attempt.attempt_timestamp
+        });
+      }
     });
 
-    const topErrors = Object.values(errorStats).map(stat => ({
-      message: stat.message,
-      count: stat.count,
-      affectedBuyers: stat.affectedBuyers.size,
-      lastOccurrence: stat.lastOccurrence
-    })).sort((a, b) => b.count - a.count).slice(0, 10);
+    const topErrors = Object.values(errorStats).map(stat => {
+      const affectedBuyersList = Array.from(stat.buyerPairs.values()).map(bp => {
+        const key = `${bp.buyer}|${bp.sourceToken}|${bp.destinationToken}`;
+        const latest = latestByBuyerPair.get(key);
+        return {
+          buyer: bp.buyer,
+          sourceToken: bp.sourceToken,
+          destinationToken: bp.destinationToken,
+          recovered: latest?.success === true,
+          lastAttemptTimestamp: latest?.attempt_timestamp ?? null,
+          lastTxHash: latest?.transaction_hash ?? null
+        };
+      });
+      const uniqueBuyers = new Set(affectedBuyersList.map(b => b.buyer));
+      const recoveredCount = affectedBuyersList.filter(b => b.recovered).length;
+      return {
+        message: stat.message,
+        count: stat.count,
+        affectedBuyers: uniqueBuyers.size,
+        recoveredPairs: recoveredCount,
+        unresolvedPairs: affectedBuyersList.length - recoveredCount,
+        affectedBuyersList,
+        lastOccurrence: stat.lastOccurrence
+      };
+    }).sort((a, b) => b.count - a.count).slice(0, 10);
 
     return res.status(200).json({
       success: true,

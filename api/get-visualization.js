@@ -23,9 +23,41 @@ const ERC20_ABI = [
 const tokenInfoCache = new Map();
 const blockTimestampCache = new Map();
 
-// Conservative average gas cost per DCA execution on Ink (in ETH).
-// Used for runway estimate; tweak via env if real metering data becomes available.
-const AVG_GAS_PER_EXEC_ETH = parseFloat(process.env.AVG_GAS_PER_EXEC_ETH || "0.00005");
+// Fallback only — used if no recent purchase receipts can be fetched.
+// Real cost is measured from on-chain receipts of recent executions (see getRecentExecutionCost).
+const FALLBACK_GAS_PER_EXEC_ETH = parseFloat(process.env.AVG_GAS_PER_EXEC_ETH || "0.00005");
+
+// Sample the last N purchase tx receipts and average gasUsed × effectiveGasPrice.
+// This is the actual cost the cron pays per DCA, so runway calc reflects reality
+// instead of a hardcoded estimate that drifts as gas/contract logic change.
+async function getRecentExecutionCost(provider, purchaseEvents, sampleSize = 10) {
+  const recent = [...purchaseEvents]
+    .filter(e => e.transactionHash)
+    .sort((a, b) => (b.blockTimestamp ?? 0) - (a.blockTimestamp ?? 0))
+    .slice(0, sampleSize);
+  if (recent.length === 0) return null;
+
+  const costs = [];
+  for (const e of recent) {
+    try {
+      const receipt = await provider.getTransactionReceipt(e.transactionHash);
+      if (!receipt) continue;
+      const gasUsed = receipt.gasUsed;
+      let gasPrice = receipt.gasPrice;
+      if (gasPrice == null) {
+        const tx = await provider.getTransaction(e.transactionHash);
+        gasPrice = tx?.gasPrice;
+      }
+      if (gasPrice == null) continue;
+      const costEth = parseFloat(ethers.formatEther(gasUsed * gasPrice));
+      if (isFinite(costEth) && costEth > 0) costs.push(costEth);
+    } catch (err) {
+      console.error(`Failed to fetch receipt for ${e.transactionHash}:`, err.message);
+    }
+  }
+  if (costs.length === 0) return null;
+  return costs.reduce((s, v) => s + v, 0) / costs.length;
+}
 
 async function getEthPrice() {
   try {
@@ -193,12 +225,21 @@ export default async function handler(req, res) {
       return Array.from(destTokens).map(destToken => ({ buyer, buyerLower, destToken }));
     });
 
+    // Buy-time histogram populated from LIVE config (not historical events) so it always
+    // reflects currently scheduled DCAs, immune to stale event cache.
+    const buyTimeHistogram = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
+
     await batchedPromiseAll(allConfigCalls, async ({ buyer, buyerLower, destToken }) => {
       try {
         const config = await contract.getDCAConfig(buyer, destToken);
         if (Number(config.days_left) > 0) {
           if (!liveActiveSessions.has(buyerLower)) liveActiveSessions.set(buyerLower, new Set());
           liveActiveSessions.get(buyerLower).add(destToken);
+
+          // buy_time is uint256 in HHMM format (e.g. 1900 = 19:00 UTC)
+          const buyTime = Number(config.buy_time ?? 0);
+          const hour = Math.floor(buyTime / 100);
+          if (hour >= 0 && hour < 24) buyTimeHistogram[hour].count += 1;
         }
       } catch (err) {
         console.log(`No active session for ${buyer} -> ${destToken}`);
@@ -226,7 +267,6 @@ export default async function handler(req, res) {
     let totalPurchasesExecuted = purchaseEvents.length;
     const dailyActivity = new Map();
     const tokenPairs = new Map();
-    const buyTimeHistogram = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
     let lastExecutionTimestamp = null;
 
     // Timestamps are now stored in cache by sync-visualization - no RPC needed here
@@ -276,11 +316,6 @@ export default async function handler(req, res) {
       const destInfo = await getTokenInfo(destinationToken, provider);
       const pairKey = `${sourceInfo.symbol} → ${destInfo.symbol}`;
       tokenPairs.set(pairKey, (tokenPairs.get(pairKey) || 0) + 1);
-
-      // Bucket scheduled buy time. On-chain buyTime is HHMM as integer (e.g. 930 = 09:30 UTC).
-      const buyTime = Number(event.args.buyTime || 0);
-      const hour = Math.floor(buyTime / 100);
-      if (hour >= 0 && hour < 24) buyTimeHistogram[hour].count += 1;
     }
 
     for (const event of purchaseEvents) {
@@ -428,7 +463,17 @@ export default async function handler(req, res) {
     const recentPurchases = purchaseEvents.filter(e => e.blockTimestamp && e.blockTimestamp >= sevenDaysAgo);
     const avgExecutionsPerDay = recentPurchases.length / 7;
     const ownerBalanceNum = parseFloat(ownerBalance) || 0;
-    const dailyEthBurn = avgExecutionsPerDay * AVG_GAS_PER_EXEC_ETH;
+
+    // Measure real gas cost from recent execution receipts; fall back to constant if RPC unavailable
+    const measuredGasPerExec = await getRecentExecutionCost(provider, purchaseEvents, 10);
+    const gasPerExecEth = measuredGasPerExec ?? FALLBACK_GAS_PER_EXEC_ETH;
+    const gasPerExecSource = measuredGasPerExec != null ? 'measured' : 'fallback';
+    if (measuredGasPerExec != null) {
+      console.log(`Gas per exec measured from receipts: ${measuredGasPerExec.toFixed(8)} ETH`);
+    } else {
+      console.log(`Gas per exec using fallback: ${FALLBACK_GAS_PER_EXEC_ETH} ETH`);
+    }
+    const dailyEthBurn = avgExecutionsPerDay * gasPerExecEth;
     const ethRunwayDays = dailyEthBurn > 0 ? Math.floor(ownerBalanceNum / dailyEthBurn) : null;
 
     // Slippage + price impact distributions from the last 30 days of executions
@@ -505,7 +550,8 @@ export default async function handler(req, res) {
         ownerAddress,
         ownerBalance,
         ethPrice,
-        avgGasPerExecEth: AVG_GAS_PER_EXEC_ETH,
+        avgGasPerExecEth: +gasPerExecEth.toFixed(8),
+        gasPerExecSource,
         needsSync: lastSyncedBlock < currentBlock,
         blocksBehind: Math.max(0, currentBlock - lastSyncedBlock)
       }

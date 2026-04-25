@@ -44,6 +44,7 @@ export default function VisualizerPage() {
   const [syncMessage, setSyncMessage] = useState("");
   const [attemptStats, setAttemptStats] = useState(null);
   const [loadingAttempts, setLoadingAttempts] = useState(false);
+  const [expandedError, setExpandedError] = useState(null);
 
   const fetchAttemptStats = async (storedPassword) => {
     setLoadingAttempts(true);
@@ -474,7 +475,11 @@ export default function VisualizerPage() {
               {overview.ethRunwayDays != null ? `${overview.ethRunwayDays} days` : '-'}
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              At {metadata.avgGasPerExecEth} ETH/exec · {parseFloat(metadata.ownerBalance).toFixed(6)} ETH owner balance
+              At {metadata.avgGasPerExecEth} ETH/exec
+              <span className={`ml-1 text-[10px] px-1 rounded ${metadata.gasPerExecSource === 'measured' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                {metadata.gasPerExecSource === 'measured' ? 'measured' : 'fallback'}
+              </span>
+              <br />· {parseFloat(metadata.ownerBalance).toFixed(6)} ETH owner balance
             </p>
           </div>
 
@@ -584,16 +589,64 @@ export default function VisualizerPage() {
                     </div>
                     <h3 className="text-lg font-bold text-gray-900">Top Errors</h3>
                   </div>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {attemptStats.topErrors.slice(0, 5).map((errorItem, index) => (
-                      <div key={index} className="bg-red-50 rounded-lg p-3 border border-red-100">
-                        <div className="flex items-start justify-between mb-1">
-                          <p className="text-xs font-mono text-red-900 flex-1 line-clamp-2">{errorItem.message}</p>
-                          <span className="bg-red-200 text-red-800 px-2 py-0.5 rounded-full text-xs font-bold ml-2">{errorItem.count}</span>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {attemptStats.topErrors.slice(0, 5).map((errorItem, index) => {
+                      const isExpanded = expandedError === index;
+                      return (
+                        <div key={index} className="bg-red-50 rounded-lg border border-red-100 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedError(isExpanded ? null : index)}
+                            className="w-full text-left p-3 hover:bg-red-100 transition-colors"
+                          >
+                            <div className="flex items-start justify-between mb-1 gap-2">
+                              <p className="text-xs font-mono text-red-900 flex-1 line-clamp-2">{errorItem.message}</p>
+                              <span className="bg-red-200 text-red-800 px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap">{errorItem.count}×</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 mt-1">
+                              <div className="flex items-center gap-2 flex-wrap text-xs">
+                                <span className="text-red-700">Affects {errorItem.affectedBuyers} buyer{errorItem.affectedBuyers !== 1 ? 's' : ''}</span>
+                                {errorItem.recoveredPairs > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-semibold">{errorItem.recoveredPairs} recovered</span>
+                                )}
+                                {errorItem.unresolvedPairs > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded bg-red-200 text-red-800 font-semibold">{errorItem.unresolvedPairs} still failing</span>
+                                )}
+                              </div>
+                              <span className="text-xs text-red-500">{isExpanded ? '▼' : '▶'}</span>
+                            </div>
+                          </button>
+                          {isExpanded && errorItem.affectedBuyersList && (
+                            <div className="border-t border-red-200 bg-white p-3 space-y-1.5">
+                              {errorItem.affectedBuyersList.map((b, bi) => (
+                                <div key={bi} className="flex items-center justify-between text-xs gap-2 py-1 border-b border-gray-100 last:border-b-0">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${b.recovered ? 'bg-green-500' : 'bg-red-500'}`} title={b.recovered ? 'Recovered' : 'Still failing'} />
+                                    <span className="font-mono text-gray-800 truncate" title={b.buyer}>{shortAddress(b.buyer)}</span>
+                                    <span className="text-gray-400">·</span>
+                                    <span className="text-gray-600 truncate">{resolveSymbol(b.sourceToken)} → {resolveSymbol(b.destinationToken)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${b.recovered ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                      {b.recovered ? 'Recovered' : 'Failing'}
+                                    </span>
+                                    {b.lastTxHash && b.recovered && (
+                                      <a
+                                        href={`https://explorer.inkonchain.com/tx/${b.lastTxHash}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-purple-600 hover:text-purple-800 underline"
+                                        title="View recovery tx"
+                                      >tx↗</a>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <p className="text-xs text-red-600">Affected {errorItem.affectedBuyers} buyer{errorItem.affectedBuyers !== 1 ? 's' : ''}</p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
