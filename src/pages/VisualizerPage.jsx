@@ -243,7 +243,8 @@ export default function VisualizerPage() {
 
   const {
     overview, sourceTokenVolumes, destinationTokenVolumes, dailyActivity, tokenPairs, metadata,
-    activeSessionsByToken = [], buyTimeHistogram = [], slippageStats, priceImpactStats, symbolMap = {}
+    activeSessionsByToken = [], buyTimeHistogram = [], slippageStats, priceImpactStats, symbolMap = {},
+    revenue = null, treasury = null
   } = data;
 
   const cronStaleSeconds = overview.lastExecutionTimestamp
@@ -493,6 +494,101 @@ export default function VisualizerPage() {
             </p>
           </div>
         </div>
+
+        {/* Generated revenue (estimated from registration fees: max(0.1% × total committed, minFee)) */}
+        {revenue && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-emerald-100 p-2 rounded-lg">
+                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Revenue & Treasury</h3>
+                  <p className="text-xs text-gray-500">Fees sent to FeeTreasury vs. live FeeTreasury balance</p>
+                </div>
+              </div>
+              {treasury && revenue.lifetime && (
+                <div className="text-right text-xs">
+                  <p className="text-gray-500">Treasury vs. lifetime estimate</p>
+                  <p className={`font-bold text-sm ${treasury.totalUsd >= revenue.lifetime.totalUsd ? 'text-green-600' : 'text-orange-600'}`}>
+                    {revenue.lifetime.totalUsd > 0
+                      ? `${((treasury.totalUsd / revenue.lifetime.totalUsd) * 100).toFixed(0)}%`
+                      : '-'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {treasury && (
+                <div className="rounded-xl border-2 border-amber-300 overflow-hidden">
+                  <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs uppercase tracking-wide opacity-90">FeeTreasury Balance</p>
+                      <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded font-semibold">LIVE</span>
+                    </div>
+                    <p className="text-3xl font-bold mt-1">{formatUsd(treasury.totalUsd)}</p>
+                    <p className="text-[10px] opacity-80 mt-0.5 font-mono truncate" title={treasury.treasuryAddress}>{shortAddress(treasury.treasuryAddress)}</p>
+                  </div>
+                  <div className="p-3 bg-amber-50 space-y-1.5 max-h-40 overflow-y-auto">
+                    {treasury.balances.length === 0 ? (
+                      <p className="text-xs text-gray-400 text-center py-2">No balances</p>
+                    ) : (
+                      treasury.balances.map((t, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-gray-700">{t.symbol}</span>
+                          <div className="text-right">
+                            <span className="text-gray-900 font-mono">{t.amount}</span>
+                            {t.usd > 0 && <span className="ml-2 text-gray-500">({formatUsd(t.usd)})</span>}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {[
+                { key: 'lifetime', label: 'Lifetime (est.)', tone: 'from-emerald-500 to-emerald-600' },
+                { key: 'monthly',  label: 'Last 30 days',    tone: 'from-teal-500 to-teal-600' },
+                { key: 'weekly',   label: 'Last 7 days',     tone: 'from-cyan-500 to-cyan-600' },
+              ].map(({ key, label, tone }) => {
+                const bucket = revenue[key];
+                if (!bucket) return null;
+                return (
+                  <div key={key} className="rounded-xl border border-gray-200 overflow-hidden">
+                    <div className={`bg-gradient-to-br ${tone} text-white p-4`}>
+                      <p className="text-xs uppercase tracking-wide opacity-90">{label}</p>
+                      <p className="text-3xl font-bold mt-1">{formatUsd(bucket.totalUsd)}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 space-y-1.5 max-h-40 overflow-y-auto">
+                      {bucket.byToken.length === 0 ? (
+                        <p className="text-xs text-gray-400 text-center py-2">No revenue in this period</p>
+                      ) : (
+                        bucket.byToken.map((t, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-gray-700">{t.symbol}</span>
+                            <div className="text-right">
+                              <span className="text-gray-900 font-mono">{t.amount}</span>
+                              {t.usd > 0 && <span className="ml-2 text-gray-500">({formatUsd(t.usd)})</span>}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-gray-400 mt-3">
+              Revenue = sum of <code className="font-mono text-xs">tokenMinFees[sourceToken]</code> sent to FeeTreasury per non-exempted registration (fees not refunded on cancel).
+              Treasury card reflects the FeeTreasury contract's live balances; gap vs. lifetime shows how much has already been withdrawn via <code className="font-mono text-xs">withdrawFees</code> / <code className="font-mono text-xs">withdrawTokens</code>.
+            </p>
+          </div>
+        )}
 
         {/* Active sessions broken down by destination token */}
         {activeSessionsByToken.length > 0 && (

@@ -11,8 +11,15 @@ const START_BLOCK = 28_000_000;
 const CONTRACT_ABI = [
   "function getRegisteredBuyers() view returns (address[] memory)",
   "function getDCAConfig(address user, address destinationToken) view returns (address sourceToken, address destinationToken, uint256 amount_per_day, uint256 days_left, bool isNativeETH, uint256 buy_time)",
-  "function owner() view returns (address)"
+  "function owner() view returns (address)",
+  "function getTokenMinFee(address token) view returns (uint256)",
+  "function feeTreasury() view returns (address)",
+  "function isExemptedFromFees(address user) view returns (bool)"
 ];
+
+// Per DCAOnInk.sol register*: fee paid to feeTreasury is exactly tokenMinFees[sourceToken],
+// charged once at registration in the source token, NOT refunded on cancel.
+// Fee-exempted users pay nothing.
 
 const ERC20_ABI = [
   "function decimals() view returns (uint8)",
@@ -280,6 +287,44 @@ export default async function handler(req, res) {
     await batchedPromiseAll(uniqueTokenAddresses, addr => getTokenInfo(addr, provider), 10);
     console.log("Pre-fetch complete.");
 
+    // Pre-fetch on-chain minFee for each unique source token (used for revenue calc)
+    const sourceTokenAddrs = [...new Set(registrationEvents.map(e => e.args.sourceToken.toLowerCase()))];
+    const minFees = new Map();
+    await batchedPromiseAll(sourceTokenAddrs, async (addr) => {
+      try {
+        const fee = await contract.getTokenMinFee(addr);
+        minFees.set(addr, BigInt(fee));
+      } catch (err) {
+        console.warn(`Failed to fetch minFee for ${addr}: ${err.message}`);
+        minFees.set(addr, 0n);
+      }
+    }, 10);
+
+    // Pre-fetch fee-exemption status for each unique buyer (exempted buyers pay no fee)
+    const uniqueBuyers = [...new Set(registrationEvents.map(e => e.args.buyer.toLowerCase()))];
+    const exempted = new Set();
+    await batchedPromiseAll(uniqueBuyers, async (addr) => {
+      try {
+        if (await contract.isExemptedFromFees(addr)) exempted.add(addr);
+      } catch (err) {
+        console.warn(`Failed to fetch exemption for ${addr}: ${err.message}`);
+      }
+    }, 20);
+    console.log(`Fee-exempted buyers: ${exempted.size}/${uniqueBuyers.length}`);
+
+    // Revenue accumulators: bucket -> sourceToken -> fee in wei
+    const nowSec = Math.floor(Date.now() / 1000);
+    const sevenDaysAgoSec = nowSec - 7 * 86400;
+    const thirtyDaysAgoSec = nowSec - 30 * 86400;
+    const revenueByBucket = {
+      lifetime: new Map(),
+      monthly: new Map(),
+      weekly: new Map()
+    };
+    const addRevenue = (bucket, token, feeWei) => {
+      bucket.set(token, (bucket.get(token) ?? 0n) + feeWei);
+    };
+
     for (const event of registrationEvents) {
       const buyer = event.args.buyer.toLowerCase();
       const sourceToken = event.args.sourceToken.toLowerCase();
@@ -316,6 +361,16 @@ export default async function handler(req, res) {
       const destInfo = await getTokenInfo(destinationToken, provider);
       const pairKey = `${sourceInfo.symbol} → ${destInfo.symbol}`;
       tokenPairs.set(pairKey, (tokenPairs.get(pairKey) || 0) + 1);
+
+      // Per DCAOnInk: fee = tokenMinFees[sourceToken] sent to feeTreasury, unless buyer is exempted
+      if (!exempted.has(buyer)) {
+        const fee = minFees.get(sourceToken) ?? 0n;
+        if (fee > 0n) {
+          addRevenue(revenueByBucket.lifetime, sourceToken, fee);
+          if (timestamp && timestamp >= thirtyDaysAgoSec) addRevenue(revenueByBucket.monthly, sourceToken, fee);
+          if (timestamp && timestamp >= sevenDaysAgoSec) addRevenue(revenueByBucket.weekly, sourceToken, fee);
+        }
+      }
     }
 
     for (const event of purchaseEvents) {
@@ -444,18 +499,96 @@ export default async function handler(req, res) {
 
     // Total USD volume of source tokens spent (stables 1:1, ETH at live price, others skipped)
     const ethPrice = await getEthPrice();
+    const usdValue = (amount, symbol) => {
+      if (!isFinite(amount) || amount === 0) return 0;
+      const sym = (symbol || '').toUpperCase();
+      if (sym.includes('USD') || sym === 'DAI') return amount;
+      if ((sym === 'ETH' || sym === 'WETH') && ethPrice != null) return amount * ethPrice;
+      return 0;
+    };
+
     let totalUsdVolume = 0;
     for (const t of sourceTokenVolumes) {
-      const v = parseFloat(t.totalVolume);
-      if (!isFinite(v) || v === 0) continue;
-      const sym = (t.symbol || '').toUpperCase();
-      if (sym.includes('USD') || sym === 'DAI') {
-        totalUsdVolume += v;
-      } else if (sym === 'ETH' || sym === 'WETH') {
-        if (ethPrice != null) totalUsdVolume += v * ethPrice;
-      }
+      totalUsdVolume += usdValue(parseFloat(t.totalVolume), t.symbol);
     }
     totalUsdVolume = Math.round(totalUsdVolume * 100) / 100;
+
+    // Build revenue breakdown per bucket — converts wei → token amount → USD where possible
+    const buildRevenueBucket = (bucket) => {
+      const byToken = [];
+      let totalUsd = 0;
+      for (const [addr, feeWei] of bucket.entries()) {
+        const info = tokenInfoCache.get(addr) || { decimals: 18, symbol: 'UNKNOWN' };
+        const amount = parseFloat(ethers.formatUnits(feeWei, info.decimals));
+        const usd = usdValue(amount, info.symbol);
+        totalUsd += usd;
+        byToken.push({
+          address: addr,
+          symbol: info.symbol,
+          amount: +amount.toFixed(6),
+          amountRaw: feeWei.toString(),
+          usd: +usd.toFixed(2)
+        });
+      }
+      byToken.sort((a, b) => b.usd - a.usd);
+      return { totalUsd: +totalUsd.toFixed(2), byToken };
+    };
+
+    const revenue = {
+      lifetime: buildRevenueBucket(revenueByBucket.lifetime),
+      monthly: buildRevenueBucket(revenueByBucket.monthly),
+      weekly: buildRevenueBucket(revenueByBucket.weekly)
+    };
+
+    // Treasury: live balance held by the FeeTreasury contract (separate from DCAOnInk).
+    // Address is read on-chain via DCAOnInk.feeTreasury(). Per FeeTreasury.sol it accepts
+    // ETH (receive/fallback) and ERC20 tokens. Gap vs lifetime revenue estimate reflects
+    // any owner withdrawals (withdrawFees / withdrawTokens).
+    let treasury = null;
+    try {
+      const feeTreasuryAddress = await contract.feeTreasury();
+      console.log(`FeeTreasury address: ${feeTreasuryAddress}`);
+
+      const treasuryBalances = [];
+      let treasuryTotalUsd = 0;
+      const ethBal = await provider.getBalance(feeTreasuryAddress);
+      const ethAmount = parseFloat(ethers.formatEther(ethBal));
+      const ethUsd = usdValue(ethAmount, 'ETH');
+      treasuryTotalUsd += ethUsd;
+      treasuryBalances.push({
+        address: '0x0000000000000000000000000000000000000000',
+        symbol: 'ETH',
+        amount: +ethAmount.toFixed(8),
+        usd: +ethUsd.toFixed(2)
+      });
+      for (const tokenAddr of sourceTokenAddrs) {
+        if (tokenAddr === '0x0000000000000000000000000000000000000000') continue;
+        try {
+          const tokenContract = new ethers.Contract(tokenAddr, ERC20_ABI, provider);
+          const bal = await tokenContract.balanceOf(feeTreasuryAddress);
+          const info = tokenInfoCache.get(tokenAddr) || { decimals: 18, symbol: 'UNKNOWN' };
+          const amount = parseFloat(ethers.formatUnits(bal, info.decimals));
+          const usd = usdValue(amount, info.symbol);
+          treasuryTotalUsd += usd;
+          treasuryBalances.push({
+            address: tokenAddr,
+            symbol: info.symbol,
+            amount: +amount.toFixed(6),
+            usd: +usd.toFixed(2)
+          });
+        } catch (err) {
+          console.warn(`Failed to fetch treasury balance for ${tokenAddr}: ${err.message}`);
+        }
+      }
+      treasuryBalances.sort((a, b) => b.usd - a.usd);
+      treasury = {
+        treasuryAddress: feeTreasuryAddress,
+        totalUsd: +treasuryTotalUsd.toFixed(2),
+        balances: treasuryBalances
+      };
+    } catch (err) {
+      console.error('Failed to fetch treasury:', err.message);
+    }
 
     // Execution rate over the last 7 days, used for runway estimate
     const now = Math.floor(Date.now() / 1000);
@@ -539,6 +672,8 @@ export default async function handler(req, res) {
       buyTimeHistogram,
       slippageStats,
       priceImpactStats,
+      revenue,
+      treasury,
       symbolMap,
       dailyActivity: dailyActivityArray,
       tokenPairs: tokenPairsArray,
