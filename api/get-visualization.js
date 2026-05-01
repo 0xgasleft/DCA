@@ -10,7 +10,7 @@ const START_BLOCK = 28_000_000;
 
 const CONTRACT_ABI = [
   "function getRegisteredBuyers() view returns (address[] memory)",
-  "function getDCAConfig(address user, address destinationToken) view returns (address sourceToken, address destinationToken, uint256 amount_per_day, uint256 days_left, bool isNativeETH, uint256 buy_time)",
+  "function getDCAConfig(address user, address destinationToken) view returns (address sourceToken, address destinationToken, uint256 amount_per_day, uint256 days_left, uint256 buy_time, bool isNativeETH)",
   "function owner() view returns (address)",
   "function getTokenMinFee(address token) view returns (uint256)",
   "function feeTreasury() view returns (address)",

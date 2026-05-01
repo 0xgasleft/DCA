@@ -955,9 +955,9 @@ export default function VisualizerPage() {
             </div>
           ) : (
             <>
-              <div className="flex items-end gap-1 h-40 border-b border-gray-200">
+              <div className="flex items-end gap-1 border-b border-gray-200" style={{ height: '160px' }}>
                 {buyTimeHistogram.map((h) => {
-                  const heightPct = (h.count / maxBuyTime) * 100;
+                  const barPx = h.count > 0 ? Math.max(Math.round((h.count / maxBuyTime) * 120), 8) : 3;
                   return (
                     <div key={h.hour} className="flex-1 flex flex-col items-center justify-end group relative" title={`${String(h.hour).padStart(2, '0')}:00 — ${h.count} session${h.count !== 1 ? 's' : ''}`}>
                       {h.count > 0 && (
@@ -965,7 +965,7 @@ export default function VisualizerPage() {
                       )}
                       <div
                         className={`w-full rounded-t transition-all ${h.count > 0 ? 'bg-gradient-to-t from-teal-600 to-teal-400 hover:from-teal-700 hover:to-teal-500' : 'bg-gray-100'}`}
-                        style={{ height: h.count > 0 ? `${Math.max(heightPct, 4)}%` : '4%' }}
+                        style={{ height: `${barPx}px` }}
                       />
                     </div>
                   );
