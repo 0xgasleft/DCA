@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ethers } from "ethers";
 import { FaSpinner } from "react-icons/fa";
 import ClockTimePicker from "../components/ClockTimePicker.jsx";
 import { formatNumber } from "../../lib/utils.js";
-import { fetchPriceImpact, formatPriceImpact, getPriceImpactSeverity } from "../../lib/priceImpact.js";
+import { fetchPriceImpact, findMinimumAmount, formatPriceImpact, getPriceImpactSeverity } from "../../lib/priceImpact.js";
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS;
 
@@ -27,17 +27,23 @@ export default function DCAConfigPage({
   const [priceImpactData, setPriceImpactData] = useState(null);
   const [fetchingImpact, setFetchingImpact] = useState(false);
   const [bestBuyTime, setBestBuyTime] = useState(null);
+  // Minimum-amount probe state, only populated after a fetchPriceImpact came back AMOUNT_TOO_LOW
+  const [minimumAmount, setMinimumAmount] = useState(null);   // BigInt | null — minimum in source base units
+  const [findingMinimum, setFindingMinimum] = useState(false);
+  // Per-pair cache of previously discovered minimums so we don't re-probe on every keystroke
+  const minimumCacheRef = useRef(new Map());
 
   const totalAmount = parseFloat(amountPerDay || 0) * parseInt(daysLeft || 0);
   const fee = totalAmount * 0.001;
   const finalFee = Math.max(fee, minFee || 0.0002);
   const calculatedFee = `${formatNumber(finalFee)} ${selectedPair.source.symbol}`;
 
-  
+
   useEffect(() => {
     const fetchImpact = async () => {
       if (!amountPerDay || parseFloat(amountPerDay) <= 0) {
         setPriceImpactData(null);
+        setMinimumAmount(null);
         return;
       }
 
@@ -47,7 +53,19 @@ export default function DCAConfigPage({
           ? "0x0000000000000000000000000000000000000000"
           : selectedPair.source.address;
         const destTokenAddress = selectedPair.destination.address;
+        const pairKey = `${sourceTokenAddress.toLowerCase()}|${destTokenAddress.toLowerCase()}`;
         const amountInWei = ethers.parseUnits(amountPerDay, selectedPair.source.decimals);
+
+        // If we've already discovered the minimum for this pair and the user's amount
+        // still falls below it, skip the Relay round-trip entirely — we already know
+        // it'll come back AMOUNT_TOO_LOW.
+        const cachedMin = minimumCacheRef.current.get(pairKey);
+        if (cachedMin != null && amountInWei < cachedMin) {
+          setPriceImpactData({ error: "AMOUNT_TOO_LOW", errorMessage: "Daily amount below minimum" });
+          setMinimumAmount(cachedMin);
+          setFetchingImpact(false);
+          return;
+        }
 
         const impact = await fetchPriceImpact(
           CONTRACT_ADDRESS,
@@ -57,18 +75,57 @@ export default function DCAConfigPage({
         );
 
         setPriceImpactData(impact);
+
+        // Quote succeeded → user is above minimum, clear any stale "too low" state
+        if (impact && !impact.error) {
+          setMinimumAmount(null);
+          return;
+        }
+
+        // Probe for minimum only when Relay specifically said the amount is too small.
+        // Other errors (NO_SWAP_ROUTES_FOUND, network) should NOT trigger a probe — those
+        // mean the pair itself is broken right now, not that the amount is low.
+        if (impact?.error === "AMOUNT_TOO_LOW") {
+          if (cachedMin != null) {
+            setMinimumAmount(cachedMin);
+            return;
+          }
+          setFindingMinimum(true);
+          const min = await findMinimumAmount(
+            CONTRACT_ADDRESS,
+            sourceTokenAddress,
+            destTokenAddress,
+            amountInWei
+          );
+          if (min != null) {
+            minimumCacheRef.current.set(pairKey, min);
+            setMinimumAmount(min);
+          } else {
+            setMinimumAmount(null);
+          }
+          setFindingMinimum(false);
+        } else {
+          setMinimumAmount(null);
+        }
       } catch (error) {
         console.error("Error fetching price impact:", error);
         setPriceImpactData(null);
+        setMinimumAmount(null);
       } finally {
         setFetchingImpact(false);
       }
     };
 
-    
+
     const timeoutId = setTimeout(fetchImpact, 1500);
     return () => clearTimeout(timeoutId);
   }, [amountPerDay, selectedPair]);
+
+  // Reset cache + state when pair changes — minimums are pair-specific
+  useEffect(() => {
+    minimumCacheRef.current = new Map();
+    setMinimumAmount(null);
+  }, [selectedPair]);
 
   // Fetch best buy time for this pair from historical execution data
   useEffect(() => {
@@ -95,6 +152,10 @@ export default function DCAConfigPage({
   const handleApprove = () => {
     onApprove({ amountPerDay, daysLeft });
   };
+
+  // True when the live quote came back AMOUNT_TOO_LOW — block submit/approve so the user
+  // can't register a session that would fail at every execution.
+  const amountBelowMinimum = priceImpactData?.error === 'AMOUNT_TOO_LOW';
 
   return (
     <>
@@ -184,8 +245,63 @@ export default function DCAConfigPage({
             </p>
           )}
 
-          {}
-          {amountPerDay && parseFloat(amountPerDay) > 0 && (
+          {/* Blocking banner: shown when Relay rejects the amount as too low. Distinct from
+              the price-impact card (which is informational about slippage / impact). The rest
+              of the form is hidden until the user picks a routable amount. */}
+          {amountPerDay && parseFloat(amountPerDay) > 0 && amountBelowMinimum && (
+            <div className="mt-3 rounded-xl border-2 border-red-500 dark:border-red-600 bg-red-50 dark:bg-red-950/40 shadow-lg shadow-red-100 dark:shadow-red-950/50 overflow-hidden">
+              <div className="bg-red-600 dark:bg-red-700 px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-white flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                  <span className="text-sm font-bold text-white uppercase tracking-wide">
+                    Cannot register at this amount
+                  </span>
+                </div>
+              </div>
+              <div className="p-4">
+                <p className="text-sm text-red-900 dark:text-red-200 font-medium mb-1">
+                  This daily amount is below the router's minimum.
+                </p>
+                <p className="text-xs text-red-800 dark:text-red-300 mb-3 leading-relaxed">
+                  Routing fees would exceed the trade value, so every daily execution would fail. You must use at least the minimum amount below to register.
+                </p>
+                {findingMinimum ? (
+                  <div className="flex items-center gap-2 text-xs font-medium text-red-800 dark:text-red-300 bg-white/60 dark:bg-black/20 rounded p-2.5">
+                    <FaSpinner className="animate-spin w-3.5 h-3.5" />
+                    <span>Calculating minimum routable amount...</span>
+                  </div>
+                ) : minimumAmount != null ? (
+                  <div className="flex items-center justify-between gap-3 bg-white dark:bg-gray-900 rounded-lg p-3 border border-red-300 dark:border-red-800">
+                    <div className="min-w-0">
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-red-700 dark:text-red-400 mb-0.5">
+                        Required minimum
+                      </div>
+                      <div className="text-base font-mono font-bold text-gray-900 dark:text-white truncate">
+                        {ethers.formatUnits(minimumAmount, selectedPair.source.decimals)} {selectedPair.source.symbol}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAmountPerDay(ethers.formatUnits(minimumAmount, selectedPair.source.decimals))}
+                      className="flex-shrink-0 px-4 py-2 text-sm font-bold rounded-lg bg-red-600 hover:bg-red-700 active:bg-red-800 text-white shadow transition-colors"
+                    >
+                      Use minimum
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-xs text-red-800 dark:text-red-300 bg-white/60 dark:bg-black/20 rounded p-2.5">
+                    Couldn't determine the minimum (router unavailable). Increase the amount manually and try again.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Price-impact card: only shown when Relay actually returned a quote. Hidden when
+              the amount is below minimum so it doesn't compete with the blocking banner. */}
+          {amountPerDay && parseFloat(amountPerDay) > 0 && !amountBelowMinimum && (
             <div className="mt-3 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -209,14 +325,16 @@ export default function DCAConfigPage({
               ) : priceImpactData?.error ? (
                 <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
                   <p className="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">
-                    {priceImpactData.error === 'AMOUNT_NOT_SUPPORTED'
-                      ? '⚠️ Amount Not Supported'
-                      : '⚠️ Unable to Get Quote'}
+                    {priceImpactData.error === 'NO_SWAP_ROUTES_FOUND'
+                      ? 'No route available'
+                      : priceImpactData.error === 'AMOUNT_NOT_SUPPORTED'
+                      ? 'Amount not supported'
+                      : 'Unable to get quote'}
                   </p>
                   <p className="text-xs text-red-600 dark:text-red-400">
-                    {priceImpactData.error === 'AMOUNT_NOT_SUPPORTED'
-                      ? 'This swap amount is not supported by the liquidity router. Try a smaller or larger amount.'
-                      : 'Unable to fetch price quote from Relay. Please try again.'}
+                    {priceImpactData.error === 'NO_SWAP_ROUTES_FOUND'
+                      ? 'The router has no liquidity path for this pair right now. Try again in a moment or pick a different pair.'
+                      : priceImpactData.errorMessage || 'Unable to fetch price quote from the router. Please try again.'}
                   </p>
                 </div>
               ) : priceImpactData ? (
@@ -333,7 +451,11 @@ export default function DCAConfigPage({
           )}
         </div>
 
-        {}
+        {/* Everything below the daily-amount input is gated on a routable amount.
+            When the router rejects the amount as too low the user must fix it before
+            seeing days, fees, buy time, or the submit/approve actions. */}
+        {!amountBelowMinimum && (
+        <>
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
             Total DCA Days
@@ -478,7 +600,7 @@ export default function DCAConfigPage({
           {needsApproval && (
             <button
               onClick={handleApprove}
-              disabled={approving || !amountPerDay || !daysLeft}
+              disabled={approving || !amountPerDay || !daysLeft || amountBelowMinimum}
               className={`w-full py-4 font-semibold rounded-lg disabled:cursor-not-allowed transition-all duration-500 transform ${
                 approvalGranted
                   ? 'bg-green-500 text-white scale-105 shadow-lg'
@@ -507,7 +629,7 @@ export default function DCAConfigPage({
 
           <button
             onClick={handleSubmit}
-            disabled={needsApproval || loading || !amountPerDay || !daysLeft}
+            disabled={needsApproval || loading || !amountPerDay || !daysLeft || amountBelowMinimum}
             className="w-full py-4 bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-700 dark:to-purple-800 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-purple-800 dark:hover:from-purple-600 dark:hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200"
           >
             {loading ? (
@@ -520,6 +642,8 @@ export default function DCAConfigPage({
             )}
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
     </>
