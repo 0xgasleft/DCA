@@ -959,7 +959,7 @@ export default function VisualizerPage() {
                 {buyTimeHistogram.map((h) => {
                   const barPx = h.count > 0 ? Math.max(Math.round((h.count / maxBuyTime) * 120), 8) : 3;
                   return (
-                    <div key={h.hour} className="flex-1 flex flex-col items-center justify-end group relative" title={`${String(h.hour).padStart(2, '0')}:00 — ${h.count} session${h.count !== 1 ? 's' : ''}`}>
+                    <div key={h.hour} className="flex-1 flex flex-col items-center justify-end group relative" title={`${String(h.hour).padStart(2, '0')}:00 - ${h.count} session${h.count !== 1 ? 's' : ''}`}>
                       {h.count > 0 && (
                         <span className="text-[10px] font-bold text-teal-700 mb-0.5">{h.count}</span>
                       )}
